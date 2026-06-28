@@ -3813,7 +3813,7 @@
       </span>
       <button id="btn-back-to-admin" style="display: flex; align-items: center; gap: 4px; border: none; background: #0045d8; color: #ffffff; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">
         <i data-lucide="arrow-left" style="width: 14px; height: 14px;"></i>
-        <span>Admin panel</span>
+        <span>Admin paneliga qaytish</span>
       </button>
     </div>
 
@@ -3863,9 +3863,18 @@
     <!-- KABINALAR VIEW -->
     <div id="view-kabinalar" class="view">
       <!-- Header -->
-      <div class="header">
+      <div class="header" style="justify-content: space-between;">
         <div class="header-left">
           <img src="rasmlar/logo.png" alt="AURA Logo" class="header-logo">
+        </div>
+        <div class="header-center" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1;">
+          <button id="btn-shift-toggle" class="btn-primary" style="padding: 8px 24px; font-size: 15px; border-radius: 12px; font-weight: 700; width: auto; min-width: 180px; box-shadow: 0 4px 12px rgba(0, 69, 216, 0.2); transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <i data-lucide="play" style="width: 16px; height: 16px;"></i>
+            <span>Smenani boshlash</span>
+          </button>
+          <div id="shift-timer-display" style="display: none; font-size: 13px; font-weight: 800; color: #ef4444; margin-top: 4px; letter-spacing: 1px;">
+            Ish vaqti: 00:00:00
+          </div>
         </div>
         <div class="header-right">
           <div class="bell-container">
@@ -4113,38 +4122,12 @@
 
           <div id="start-duration-section">
             <div class="form-group">
-              <label class="form-label">Tavsiyalar</label>
-              <div class="templates-grid">
-                <div class="template-card" data-mins="15">
-                  <div class="template-time">15 daqiqa</div>
-                  <div class="template-desc" id="tpl-price-15"></div>
-                </div>
-                <div class="template-card" data-mins="30">
-                  <div class="template-time">30 daqiqa</div>
-                  <div class="template-desc" id="tpl-price-30"></div>
-                </div>
-                <div class="template-card" data-mins="45">
-                  <div class="template-time">45 daqiqa</div>
-                  <div class="template-desc" id="tpl-price-45"></div>
-                </div>
-                <div class="template-card" data-mins="60">
-                  <div class="template-time">1 soat</div>
-                  <div class="template-desc" id="tpl-price-60"></div>
-                </div>
-                <div class="template-card" data-mins="120">
-                  <div class="template-time">2 soat</div>
-                  <div class="template-desc" id="tpl-price-120"></div>
-                </div>
-                <div class="template-card" data-mins="180">
-                  <div class="template-time">3 soat</div>
-                  <div class="template-desc" id="tpl-price-180"></div>
-                </div>
-              </div>
+              <label class="form-label" style="font-size: 16px; font-weight: 600;">Mijoz to'lovi (so'm)</label>
+              <input type="number" id="start-money-amount" class="form-input" placeholder="Summani yozing (masalan: 22000)" style="font-size: 20px; font-weight: bold; padding: 15px;">
             </div>
-
-            <div class="form-group">
-              <label class="form-label">Maxsus vaqt (daqiqa)</label>
-              <input type="number" id="start-custom-minutes" class="form-input" placeholder="Daqiqalar miqdorini yozing">
+            <div class="form-group" style="text-align: center; margin-top: 15px; padding: 15px; background: #f3f4f6; border-radius: 8px;">
+              <div style="font-size: 14px; color: #6b7280; margin-bottom: 5px;">Hisoblangan vaqt:</div>
+              <div id="start-calculated-time" style="font-size: 24px; font-weight: 700; color: #3b82f6;">00:00:00</div>
             </div>
           </div>
         </div>
@@ -4163,34 +4146,28 @@
           <button class="icon-btn btn-close-modal"><i data-lucide="x"></i></button>
         </div>
         <div class="modal-body">
-          <div class="templates-grid">
-            <div class="template-card add-time-template" data-mins="15">
-              <div class="template-time">15 daqiqa</div>
+            <div class="form-group" style="margin-bottom: 15px;">
+              <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                <button class="btn-secondary add-time-preset" style="flex: 1; padding: 10px 5px;" data-amount="5000">5 000 so'm</button>
+                <button class="btn-secondary add-time-preset" style="flex: 1; padding: 10px 5px;" data-amount="10000">10 000 so'm</button>
+                <button class="btn-secondary add-time-preset" style="flex: 1; padding: 10px 5px;" data-amount="20000">20 000 so'm</button>
+              </div>
             </div>
-            <div class="template-card add-time-template" data-mins="30">
-              <div class="template-time">30 daqiqa</div>
+            <div class="form-group">
+              <label class="form-label" style="font-size: 16px; font-weight: 600;">Qo'shimcha to'lov (so'm) / Yoki boshqa summa</label>
+              <input type="number" id="add-money-amount" class="form-input" placeholder="Summani yozing (masalan: 22000)" style="font-size: 20px; font-weight: bold; padding: 15px;">
             </div>
-            <div class="template-card add-time-template" data-mins="45">
-              <div class="template-time">45 daqiqa</div>
+            <div class="form-group" style="text-align: center; margin-top: 15px; padding: 15px; background: #f3f4f6; border-radius: 8px;">
+              <div style="font-size: 14px; color: #6b7280; margin-bottom: 5px;">Qo'shiladigan vaqt:</div>
+              <div id="add-calculated-time" style="font-size: 24px; font-weight: 700; color: #3b82f6;">00:00:00</div>
             </div>
-            <div class="template-card add-time-template" data-mins="60">
-              <div class="template-time">1 soat</div>
+            <div class="form-group" style="margin-top: 15px;">
+              <button class="btn-primary" id="btn-submit-add-time" style="width: 100%; margin-bottom: 10px;">Qo'shish</button>
+              <div style="display: flex; align-items: center; justify-content: center; margin: 10px 0; color: #9ca3af; font-size: 12px; font-weight: 600; text-transform: uppercase;">Yoki</div>
+              <button class="btn-secondary" id="btn-submit-unlimited-mode" style="width: 100%; background-color: #f59e0b; color: white; border: none;">♾️ Cheksizga ochish</button>
             </div>
-            <div class="template-card add-time-template" data-mins="120">
-              <div class="template-time">2 soat</div>
-            </div>
-            <div class="template-card add-time-template" data-mins="180">
-              <div class="template-time">3 soat</div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Maxsus vaqt (daqiqa)</label>
-            <input type="number" id="add-time-custom-minutes" class="form-input" placeholder="Daqiqalar miqdorini yozing">
-          </div>
         </div>
-        <div class="modal-actions">
-          <button class="btn-primary" id="btn-submit-add-time">Qo'shish</button>
+        <div class="modal-actions" style="border-top: 1px solid #e5e7eb; padding-top: 15px; margin-top: 10px; display: flex; justify-content: flex-end;">
           <button class="btn-secondary btn-close-modal">Bekor qilish</button>
         </div>
       </div>
@@ -4361,6 +4338,24 @@
         </div>
         <div class="receipt-actions">
           <button class="btn-receipt-finish" id="btn-receipt-yakunlash">Yakunlash</button>
+      </div>
+    </div>
+
+    <!-- SHIFT REPORT MODAL -->
+    <div class="modal-overlay" id="modal-shift-report">
+      <div class="modal-content" style="max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+          <h3 class="modal-title">Smena hisoboti</h3>
+          <button class="icon-btn btn-close-modal"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body" id="shift-report-body" style="overflow-y: auto; padding-right: 8px;">
+          <!-- Content populated via JS -->
+        </div>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button class="btn-primary" id="btn-save-shift" style="background: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);">
+            <i data-lucide="save" style="width: 16px; height: 16px; margin-right: 6px;"></i> Hisobotni saqlash
+          </button>
+          <button class="btn-secondary btn-close-modal">Yopish</button>
         </div>
       </div>
     </div>
@@ -4411,6 +4406,10 @@
         <a href="#" class="nav-link" data-view="stats">
           <i data-lucide="trending-up"></i>
           <span>Statistikalar</span>
+        </a>
+        <a href="#" class="nav-link" data-view="shifts">
+          <i data-lucide="calendar-clock"></i>
+          <span>Smena hisobotlari</span>
         </a>
         <a href="#" class="nav-link" data-view="passwords">
           <i data-lucide="key-round"></i>
@@ -4838,6 +4837,33 @@
           </div>
         </section>
 
+        <!-- SHIFTS REPORTS VIEW -->
+        <section id="view-shifts" class="admin-view">
+          <div class="card">
+            <h3 class="card-title">Smena hisobotlari</h3>
+            <div class="table-responsive" style="margin-top: 16px;">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Sana</th>
+                    <th>Boshlangan vaqt</th>
+                    <th>Tugagan vaqt</th>
+                    <th>Ishlagan vaqti</th>
+                    <th>PlayStation</th>
+                    <th>Ichimlik</th>
+                    <th>Kalyan</th>
+                    <th>Umumiy savdo</th>
+                    <th>Sof tushum</th>
+                  </tr>
+                </thead>
+                <tbody id="shifts-history-list">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <!-- PASSWORDS VIEW -->
         <section id="view-passwords" class="admin-view">
           <div class="passwords-grid">
@@ -4948,12 +4974,17 @@
             <select id="product-category" class="form-input" required>
               <option value="Ichimliklar">Ichimliklar</option>
               <option value="Yeguliklar">Yeguliklar (Snacks)</option>
+              <option value="Kalyanlar">Kalyanlar</option>
               <option value="Boshqa">Boshqa</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label" for="product-price">Narxi (so'm)</label>
+            <label class="form-label" for="product-price">Sotuv narxi (so'm) - Mijoz uchun</label>
             <input type="number" id="product-price" class="form-input" placeholder="Masalan: 8000" min="0" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="product-admin-profit">Tushumga qo'shiladigan foyda (so'm)</label>
+            <input type="number" id="product-admin-profit" class="form-input" placeholder="Agar bo'sh qolsa, sotuv narxi olinadi" min="0">
           </div>
           <div class="form-group">
             <label class="form-label" for="product-stock">Ombordagi mavjud soni (Stock)</label>
@@ -5016,7 +5047,10 @@
     const PRODUCTS_LIST = [
       { id: 'cola033', name: 'Coca-Cola Classic 0.33L', price: 5000, category: 'Ichimliklar', img: 'rasmlar/cola33.png' },
       { id: 'cola1', name: 'Coca-Cola 1L', price: 15000, category: 'Ichimliklar', img: 'rasmlar/cola1.png' },
-      { id: 'cola15', name: 'Coca-Cola 1.5L', price: 18000, category: 'Ichimliklar', img: 'rasmlar/cola15.png' }
+      { id: 'cola15', name: 'Coca-Cola 1.5L', price: 18000, category: 'Ichimliklar', img: 'rasmlar/cola15.png' },
+      { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+      { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+      { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
     ];
 
     // Uzbek calendar labels
@@ -5119,11 +5153,19 @@
       const storedProducts = localStorage.getItem('aura_products_data');
       if (storedProducts) {
         const loadedProducts = JSON.parse(storedProducts);
+        
+        const defaultProds = [
+          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
+        ];
+        defaultProds.forEach(dp => {
+          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
+        });
+
         PRODUCTS_LIST.length = 0;
         loadedProducts.forEach(p => {
-          if (p.stock === undefined) {
-            p.stock = 20;
-          }
+          if (p.stock === undefined) p.stock = 20;
           PRODUCTS_LIST.push(p);
         });
         localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
@@ -5246,6 +5288,7 @@
       if (globalTimerInterval) clearInterval(globalTimerInterval);
       globalTimerInterval = setInterval(() => {
         updateTimers();
+        if (typeof updateShiftTimer === 'function') updateShiftTimer();
       }, 1000);
     }
 
@@ -5395,24 +5438,37 @@
       const cabin = cabins.find(c => c.id === cabinId);
       document.getElementById('start-modal-title').innerText = `${cabin.name} — Sessiya boshlash`;
       
-      // Calculate and display price indicators
-      const hourly = cabin.pricePerHour;
-      document.getElementById('tpl-price-15').innerText = formatMoney(hourly * 0.25);
-      document.getElementById('tpl-price-30').innerText = formatMoney(hourly * 0.5);
-      document.getElementById('tpl-price-45').innerText = formatMoney(hourly * 0.75);
-      document.getElementById('tpl-price-60').innerText = formatMoney(hourly);
-      document.getElementById('tpl-price-120').innerText = formatMoney(hourly * 2);
-      document.getElementById('tpl-price-180').innerText = formatMoney(hourly * 3);
-
       // Default state: limited
       setStartSessionMode('limited');
 
       // Clear input values
-      document.getElementById('start-custom-minutes').value = '';
+      document.getElementById('start-money-amount').value = '';
+      document.getElementById('start-calculated-time').innerText = '00:00:00';
 
       // Open Modal
       document.getElementById('modal-start-session').classList.add('active');
     }
+
+    // Money to time dynamic calculation logic
+    document.getElementById('start-money-amount').addEventListener('input', (e) => {
+        const amount = parseFloat(e.target.value);
+        const calcEl = document.getElementById('start-calculated-time');
+        if (!activeCabinId || isNaN(amount) || amount <= 0) {
+            calcEl.innerText = '00:00:00';
+            return;
+        }
+        const cabin = cabins.find(c => c.id === activeCabinId);
+        if (!cabin) return;
+        
+        const pricePerHour = cabin.pricePerHour;
+        const totalMinutes = (amount / pricePerHour) * 60;
+        const totalSeconds = Math.floor(totalMinutes * 60);
+        
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        calcEl.innerText = `${formatTimeComponent(h)}:${formatTimeComponent(m)}:${formatTimeComponent(s)}`;
+    });
 
     let startSessionMode = 'limited'; // 'limited' or 'unlimited'
 
@@ -5436,14 +5492,6 @@
     document.getElementById('btn-mode-limited').addEventListener('click', () => setStartSessionMode('limited'));
     document.getElementById('btn-mode-unlimited').addEventListener('click', () => setStartSessionMode('unlimited'));
 
-    // Template selections in start modal
-    document.querySelectorAll('#modal-start-session .template-card').forEach(card => {
-      card.addEventListener('click', (e) => {
-        const mins = e.currentTarget.getAttribute('data-mins');
-        document.getElementById('start-custom-minutes').value = mins;
-      });
-    });
-
     // Submit Start Session
     document.getElementById('btn-submit-start-session').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
@@ -5454,13 +5502,17 @@
       let durationMinutes = null;
 
       if (startSessionMode === 'limited') {
-        const customMins = parseInt(document.getElementById('start-custom-minutes').value, 10);
-        if (isNaN(customMins) || customMins <= 0) {
-          alert("Iltimos, sessiya vaqtini daqiqalarda kiriting yoki shablonni tanlang.");
+        const amount = parseFloat(document.getElementById('start-money-amount').value);
+        if (isNaN(amount) || amount <= 0) {
+          alert("Iltimos, mijoz to'lovini to'g'ri kiriting.");
           return;
         }
-        durationMinutes = customMins;
-        endTime = new Date(now.getTime() + customMins * 60 * 1000).toISOString();
+        
+        const pricePerHour = cabin.pricePerHour;
+        const totalMinutes = (amount / pricePerHour) * 60;
+        durationMinutes = totalMinutes; // Keep precision in state
+        
+        endTime = new Date(now.getTime() + totalMinutes * 60 * 1000).toISOString();
       }
 
       cabin.status = "O'yinda";
@@ -5619,9 +5671,13 @@
 
       // Products cost
       let productsAmount = 0;
+      let adminProductsAmount = 0;
       if (cabin.session.products) {
         cabin.session.products.forEach(p => {
           productsAmount += (p.price * p.quantity);
+          const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
+          const profitPerItem = (originalProd && originalProd.adminProfit !== undefined && originalProd.adminProfit !== null && originalProd.adminProfit !== "") ? Number(originalProd.adminProfit) : p.price;
+          adminProductsAmount += (profitPerItem * p.quantity);
         });
       }
 
@@ -5629,32 +5685,51 @@
         playAmount: playAmount,
         productsAmount: productsAmount,
         totalAmount: playAmount + productsAmount,
+        adminProductsAmount: adminProductsAmount,
+        adminTotalAmount: playAmount + adminProductsAmount,
         playedMinutes: playedMinutes
       };
     }
 
     // VAQT QO'SHISH MODAL EVENT
     document.getElementById('btn-details-add-time').addEventListener('click', () => {
-      document.getElementById('add-time-custom-minutes').value = '';
+      document.getElementById('add-money-amount').value = '';
+      document.getElementById('add-calculated-time').innerText = '00:00:00';
       document.getElementById('modal-add-time').classList.add('active');
     });
 
-    document.querySelectorAll('.add-time-template').forEach(card => {
-      card.addEventListener('click', (e) => {
-        const mins = e.currentTarget.getAttribute('data-mins');
-        document.getElementById('add-time-custom-minutes').value = mins;
-      });
+    document.getElementById('add-money-amount').addEventListener('input', (e) => {
+        const amount = parseFloat(e.target.value);
+        const calcEl = document.getElementById('add-calculated-time');
+        if (!activeCabinId || isNaN(amount) || amount <= 0) {
+            calcEl.innerText = '00:00:00';
+            return;
+        }
+        const cabin = cabins.find(c => c.id === activeCabinId);
+        if (!cabin) return;
+        
+        const pricePerHour = cabin.pricePerHour;
+        const totalMinutes = (amount / pricePerHour) * 60;
+        const totalSeconds = Math.floor(totalMinutes * 60);
+        
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        calcEl.innerText = `${formatTimeComponent(h)}:${formatTimeComponent(m)}:${formatTimeComponent(s)}`;
     });
 
     document.getElementById('btn-submit-add-time').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
-      const extraMins = parseInt(document.getElementById('add-time-custom-minutes').value, 10);
-      if (isNaN(extraMins) || extraMins <= 0) {
-        alert("Iltimos, qo'shiladigan vaqtni daqiqalarda kiriting.");
+      const amount = parseFloat(document.getElementById('add-money-amount').value);
+      if (isNaN(amount) || amount <= 0) {
+        alert("Iltimos, qo'shimcha to'lovni to'g'ri kiriting.");
         return;
       }
+      
+      const pricePerHour = cabin.pricePerHour;
+      const extraMins = (amount / pricePerHour) * 60;
 
       if (cabin.session.endTime) {
         // Limited session: extend end time
@@ -5664,15 +5739,38 @@
       } else {
         // Unlimited session: converting to limited
         const now = new Date();
-        const elapsedMs = now - new Date(cabin.session.startTime);
-        const nextEnd = new Date(now.getTime() + extraMins * 60 * 1000);
-        cabin.session.endTime = nextEnd.toISOString();
-        cabin.session.durationMinutes = Math.ceil(elapsedMs / (60 * 1000)) + extraMins;
+        cabin.session.endTime = new Date(now.getTime() + extraMins * 60 * 1000).toISOString();
+        cabin.session.durationMinutes = extraMins;
+        // reset elapsed seconds
+        cabin.session.elapsedSeconds = 0;
       }
-
+      
       saveDB();
       updateTimers();
       closeAllModals();
+      addLog(`${cabin.name} ga ${formatMoney(amount)} so'mlik (${formatDuration(extraMins)}) vaqt qo'shildi`);
+    });
+
+    document.querySelectorAll('.add-time-preset').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const amount = e.target.getAttribute('data-amount');
+        const input = document.getElementById('add-money-amount');
+        input.value = amount;
+        input.dispatchEvent(new Event('input'));
+      });
+    });
+
+    document.getElementById('btn-submit-unlimited-mode').addEventListener('click', () => {
+      const cabin = cabins.find(c => c.id === activeCabinId);
+      if (!cabin || !cabin.session) return;
+      
+      cabin.session.endTime = null;
+      cabin.session.durationMinutes = null;
+      
+      saveDB();
+      updateTimers();
+      closeAllModals();
+      addLog(`${cabin.name} sessiyasi Cheksiz rejimga o'tkazildi`);
     });
 
     // TAHRIRLASH (EDIT SESSION) MODAL EVENTS
@@ -5777,8 +5875,9 @@
 
       filtered.forEach(p => {
         const qty = selectedProductsCart[p.id] || 0;
+        const isKalyan = p.category === 'Kalyanlar';
         const stockVal = p.stock !== undefined ? p.stock : 20;
-        const isOutOfStock = stockVal <= 0;
+        const isOutOfStock = !isKalyan && stockVal <= 0;
         
         const card = document.createElement('div');
         card.className = 'product-card' + (isOutOfStock ? ' out-of-stock' : '');
@@ -5787,12 +5886,14 @@
         }
 
         let stockIndicatorHTML = '';
-        if (stockVal <= 0) {
-          stockIndicatorHTML = `<span style="font-size: 11px; color: #ef4444; font-weight: 600; margin-top: 2px;">Tugagan</span>`;
-        } else if (stockVal <= 5) {
-          stockIndicatorHTML = `<span style="font-size: 11px; color: #f59e0b; font-weight: 600; margin-top: 2px;">Faqat ${stockVal} ta qoldi</span>`;
-        } else {
-          stockIndicatorHTML = `<span style="font-size: 11px; color: #6b7280; margin-top: 2px;">Omborda: ${stockVal} ta</span>`;
+        if (!isKalyan) {
+          if (stockVal <= 0) {
+            stockIndicatorHTML = `<span style="font-size: 11px; color: #ef4444; font-weight: 600; margin-top: 2px;">Tugagan</span>`;
+          } else if (stockVal <= 5) {
+            stockIndicatorHTML = `<span style="font-size: 11px; color: #f59e0b; font-weight: 600; margin-top: 2px;">Faqat ${stockVal} ta qoldi</span>`;
+          } else {
+            stockIndicatorHTML = `<span style="font-size: 11px; color: #6b7280; margin-top: 2px;">Omborda: ${stockVal} ta</span>`;
+          }
         }
 
         let qtyControllerHTML = '';
@@ -5836,9 +5937,10 @@
             const id = btn.getAttribute('data-id');
             const prod = PRODUCTS_LIST.find(pr => pr.id === id);
             const currentQty = selectedProductsCart[id] || 0;
+            const isKalyan = prod && prod.category === 'Kalyanlar';
             const stockLimit = prod && prod.stock !== undefined ? prod.stock : 20;
 
-            if (currentQty >= stockLimit) {
+            if (!isKalyan && currentQty >= stockLimit) {
               alert(`Omborda faqat ${stockLimit} ta mahsulot bor!`);
               return;
             }
@@ -6028,6 +6130,8 @@
         playAmount: calc.playAmount,
         productAmount: calc.productsAmount,
         totalAmount: calc.totalAmount,
+        adminProductAmount: calc.adminProductsAmount,
+        adminTotalAmount: calc.adminTotalAmount,
         products: cabin.session.products ? [...cabin.session.products] : [],
         dateString: dateStr
       };
@@ -6144,7 +6248,7 @@
       if (pendingOrderRecord.products && pendingOrderRecord.products.length > 0) {
         pendingOrderRecord.products.forEach(p => {
           const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
-          if (originalProd) {
+          if (originalProd && originalProd.category !== 'Kalyanlar') {
             if (originalProd.stock === undefined) {
               originalProd.stock = 20;
             }
@@ -6695,11 +6799,19 @@
       const storedProducts = localStorage.getItem('aura_products_data');
       if (storedProducts) {
         const loadedProducts = JSON.parse(storedProducts);
+        
+        const defaultProds = [
+          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
+        ];
+        defaultProds.forEach(dp => {
+          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
+        });
+
         PRODUCTS_LIST.length = 0;
         loadedProducts.forEach(p => {
-          if (p.stock === undefined) {
-            p.stock = 20;
-          }
+          if (p.stock === undefined) p.stock = 20;
           PRODUCTS_LIST.push(p);
         });
         localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
@@ -6798,6 +6910,8 @@
           
           renderCabinsGrid();
           showView('view-kabinalar');
+          if (typeof renderShiftToggle === 'function') renderShiftToggle();
+          startTimerLoop();
         } else {
           loginErrorMessage.innerText = "Noto'g'ri parol!";
         }
@@ -7883,6 +7997,8 @@
       if (typeof showView === 'function') {
         showView('view-kabinalar');
       }
+      if (typeof renderShiftToggle === 'function') renderShiftToggle();
+      if (typeof startTimerLoop === 'function') startTimerLoop();
       
       // Close sidebar on mobile if active
       closeSidebar();
@@ -7914,6 +8030,9 @@
         case 'stats':
           renderStatsPage('today');
           break;
+        case 'shifts':
+          if (typeof renderAdminShifts === 'function') renderAdminShifts();
+          break;
         case 'passwords':
           // Just resets passwords forms
           document.getElementById('form-change-admin-pw').reset();
@@ -7929,9 +8048,9 @@
 
       // Calculate Bugungi buyurtmalar (Today's orders)
       const todayOrders = orders.filter(o => o.endTime.split('T')[0] === todayStr);
-      const todayRevenue = todayOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+      const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.adminTotalAmount !== undefined ? o.adminTotalAmount : o.totalAmount), 0);
       const todayPlaySum = todayOrders.reduce((sum, o) => sum + o.playAmount, 0);
-      const todayProductSum = todayOrders.reduce((sum, o) => sum + o.productAmount, 0);
+      const todayProductSum = todayOrders.reduce((sum, o) => sum + (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount), 0);
 
       // Compute active cabin stats from memory
       let activeCabinsCount = 0;
@@ -8070,7 +8189,7 @@
       const lowStockContainer = document.getElementById('dashboard-low-stock-products');
       if (lowStockContainer) {
         lowStockContainer.innerHTML = '';
-        const lowStockProds = products.filter(p => (p.stock !== undefined ? p.stock : 20) <= 5);
+        const lowStockProds = products.filter(p => p.category !== 'Kalyanlar' && (p.stock !== undefined ? p.stock : 20) <= 5);
         
         if (lowStockProds.length === 0) {
           lowStockContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px 0; font-size: 13px; font-style: italic;">Kam qolgan mahsulotlar yo'q</div>`;
@@ -8339,12 +8458,14 @@
 
         const stockVal = p.stock !== undefined ? p.stock : 20;
         let badgeHTML = '';
-        if (stockVal <= 0) {
-          badgeHTML = `<span class="badge badge-red">Tugagan</span>`;
-        } else if (stockVal <= 5) {
-          badgeHTML = `<span class="badge badge-yellow">Kam qoldi (${stockVal})</span>`;
-        } else {
-          badgeHTML = `<span class="badge badge-green">Mavjud (${stockVal})</span>`;
+        if (p.category !== 'Kalyanlar') {
+          if (stockVal <= 0) {
+            badgeHTML = `<span class="badge badge-red">Tugagan</span>`;
+          } else if (stockVal <= 5) {
+            badgeHTML = `<span class="badge badge-yellow">Kam qoldi (${stockVal})</span>`;
+          } else {
+            badgeHTML = `<span class="badge badge-green">Mavjud (${stockVal})</span>`;
+          }
         }
 
         card.innerHTML = `
@@ -8357,6 +8478,7 @@
             <span class="admin-product-price" style="margin-top: 0; font-weight: 700;">${formatMoney(p.price)}</span>
             ${badgeHTML}
           </div>
+          ${(p.adminProfit !== undefined && p.adminProfit !== p.price) ? `<div style="font-size: 12px; color: #10b981; margin-top: 4px; font-weight: 600;">Foyda: ${formatMoney(p.adminProfit)}</div>` : ''}
           
           <div class="admin-product-actions" style="margin-top: 14px;">
             <button class="btn btn-secondary btn-edit-product" data-id="${p.id}">
@@ -8407,6 +8529,19 @@
       });
     }
 
+    if (productCategoryInput) {
+      productCategoryInput.addEventListener('change', (e) => {
+        const stockGroup = productStockInput.closest('.form-group');
+        if (e.target.value === 'Kalyanlar') {
+          stockGroup.style.display = 'none';
+          productStockInput.required = false;
+        } else {
+          stockGroup.style.display = 'block';
+          productStockInput.required = true;
+        }
+      });
+    }
+
     function openProductForm(mode, productId = '') {
       productFormMode.value = mode;
       formProduct.reset();
@@ -8417,6 +8552,7 @@
         document.getElementById('modal-product-title').innerText = "Yangi mahsulot qo'shish";
         productFormId.value = '';
         productStockInput.value = '20';
+        document.getElementById('product-admin-profit').value = '';
       } else {
         document.getElementById('modal-product-title').innerText = "Mahsulotni tahrirlash";
         const p = products.find(prod => prod.id === productId);
@@ -8425,6 +8561,7 @@
         productNameInput.value = p.name;
         productCategoryInput.value = p.category;
         productPriceInput.value = p.price;
+        document.getElementById('product-admin-profit').value = (p.adminProfit !== undefined && p.adminProfit !== p.price) ? p.adminProfit : '';
         productStockInput.value = p.stock !== undefined ? p.stock : 20;
 
         if (['rasmlar/cola33.png', 'rasmlar/cola1.png', 'rasmlar/cola15.png'].includes(p.img)) {
@@ -8437,6 +8574,8 @@
         }
       }
 
+      // Hide or show stock depending on category
+      setTimeout(() => productCategoryInput.dispatchEvent(new Event('change')), 10);
       modalProduct.classList.add('active');
     }
 
@@ -8448,6 +8587,8 @@
         const name = productNameInput.value;
         const category = productCategoryInput.value;
         const price = parseInt(productPriceInput.value, 10);
+        const adminProfitVal = document.getElementById('product-admin-profit').value;
+        const adminProfit = adminProfitVal !== '' ? parseInt(adminProfitVal, 10) : price;
         const stock = parseInt(productStockInput.value, 10) || 0;
         
         let img = productImageSelect.value;
@@ -8461,6 +8602,7 @@
             id: finalIdStr,
             name: name,
             price: price,
+            adminProfit: adminProfit,
             stock: stock,
             category: category,
             img: img
@@ -8472,6 +8614,7 @@
           if (p) {
             p.name = name;
             p.price = price;
+            p.adminProfit = adminProfit;
             p.stock = stock;
             p.category = category;
             p.img = img;
@@ -8839,7 +8982,7 @@
               const slotIdx = Math.floor(hour / 4);
               if (slotIdx >= 0 && slotIdx < 6) {
                 yestPlay[slotIdx] += o.playAmount;
-                yestProd[slotIdx] += o.productAmount;
+                yestProd[slotIdx] += (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount);
               }
             });
             chartPlayData = yestPlay;
@@ -8860,7 +9003,7 @@
               filtered.push(...dayOrders);
 
               chartPlayData.push(dayOrders.reduce((s, o) => s + o.playAmount, 0));
-              chartProductData.push(dayOrders.reduce((s, o) => s + o.productAmount, 0));
+              chartProductData.push(dayOrders.reduce((s, o) => s + (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount), 0));
             }
             break;
 
@@ -8880,7 +9023,7 @@
               const weekIdx = Math.min(3, Math.floor((29 - i) / 7.5));
               dayOrders.forEach(o => {
                 weekPlay[weekIdx] += o.playAmount;
-                weekProd[weekIdx] += o.productAmount;
+                weekProd[weekIdx] += (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount);
               });
             }
             chartPlayData = weekPlay;
@@ -8911,7 +9054,7 @@
               const yIdx = yearsList.indexOf(y);
               if (yIdx !== -1) {
                 yPlay[yIdx] += o.playAmount;
-                yProd[yIdx] += o.productAmount;
+                yProd[yIdx] += (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount);
               }
             });
 
@@ -8923,7 +9066,7 @@
 
       // Calculate totals
       const totalPlay = filtered.reduce((s, o) => s + o.playAmount, 0);
-      const totalProducts = filtered.reduce((s, o) => s + o.productAmount, 0);
+      const totalProducts = filtered.reduce((s, o) => s + (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount), 0);
       const totalRevenue = totalPlay + totalProducts;
 
       document.getElementById('revenue-total-val').innerText = formatMoney(totalRevenue);
@@ -9358,6 +9501,356 @@
     });
 
 
+    // ── SHIFT MANAGEMENT SYSTEM ──
+    const btnShiftToggle = document.getElementById('btn-shift-toggle');
+    const shiftTimerDisplay = document.getElementById('shift-timer-display');
+    const modalShiftReport = document.getElementById('modal-shift-report');
+    const shiftReportBody = document.getElementById('shift-report-body');
+    const btnSaveShift = document.getElementById('btn-save-shift');
+
+    function getActiveShift() {
+      const s = localStorage.getItem('aura_active_shift');
+      return s ? JSON.parse(s) : null;
+    }
+
+    function setActiveShift(shiftObj) {
+      if (shiftObj) {
+        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
+      } else {
+        localStorage.removeItem('aura_active_shift');
+      }
+    }
+
+    function renderShiftToggle() {
+      if (!btnShiftToggle) return;
+      const activeShift = getActiveShift();
+      if (activeShift) {
+        btnShiftToggle.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
+        btnShiftToggle.style.background = '#ef4444';
+        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
+        shiftTimerDisplay.style.display = 'block';
+      } else {
+        btnShiftToggle.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
+        btnShiftToggle.style.background = '#0045d8';
+        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
+        shiftTimerDisplay.style.display = 'none';
+      }
+      lucide.createIcons();
+    }
+
+    function updateShiftTimer() {
+      const activeShift = getActiveShift();
+      if (activeShift && shiftTimerDisplay) {
+        const now = new Date();
+        const start = new Date(activeShift.startTime);
+        const diffSecs = Math.floor((now - start) / 1000);
+        
+        const h = Math.floor(diffSecs / 3600).toString().padStart(2, '0');
+        const m = Math.floor((diffSecs % 3600) / 60).toString().padStart(2, '0');
+        const s = (diffSecs % 60).toString().padStart(2, '0');
+        
+        shiftTimerDisplay.innerText = `Ish vaqti: ${h}:${m}:${s}`;
+      }
+    }
+
+    function generateShiftReportHTML(shiftData) {
+      const { 
+        startTime, endTime, 
+        ps4Amount, ps4Hours, ps4Count,
+        ps5Amount, ps5Hours, ps5Count,
+        vipAmount, vipHours, vipCount,
+        totalPlayAmount, drinksList, totalDrinksAmount,
+        kalyanList, totalKalyanAmount, totalKalyanProfit,
+        totalSales, totalProfit, totalClients, totalSessions
+      } = shiftData;
+
+      const formatDt = d => new Date(d).toLocaleString('uz-UZ', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'});
+      const diffMs = new Date(endTime) - new Date(startTime);
+      const diffH = Math.floor(diffMs / 3600000);
+      const diffM = Math.floor((diffMs % 3600000) / 60000);
+
+      let drinksHtml = drinksList.map(d => `
+        <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+          <span>${d.name} (${d.qty} dona)</span>
+          <span>${formatMoney(d.total)}</span>
+        </div>
+      `).join('');
+      if (!drinksHtml) drinksHtml = '<div style="font-size: 13px; color: #9ca3af; font-style: italic;">Sotuv bo\'lmagan</div>';
+
+      let kalyanHtml = kalyanList.map(k => `
+        <div style="font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px;">
+          <div style="display: flex; justify-content: space-between; font-weight: 600;">
+            <span>${k.name} (${k.qty} dona)</span>
+            <span>${formatMoney(k.total)}</span>
+          </div>
+          <div style="color: #10b981; font-size: 12px; text-align: right;">Foyda: ${formatMoney(k.profit)}</div>
+        </div>
+      `).join('');
+      if (!kalyanHtml) kalyanHtml = '<div style="font-size: 13px; color: #9ca3af; font-style: italic;">Sotuv bo\'lmagan</div>';
+
+      return `
+        <div style="background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
+            <span style="color: #6b7280;">Boshlangan:</span>
+            <span style="font-weight: 600;">${formatDt(startTime)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
+            <span style="color: #6b7280;">Tugagan:</span>
+            <span style="font-weight: 600;">${formatDt(endTime)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px;">
+            <span style="color: #6b7280;">Jami ishlagan:</span>
+            <span style="font-weight: 600;">${diffH} soat ${diffM} daqiqa</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
+            <span style="color: #6b7280;">Xizmat ko'rsatilgan mijozlar (Cheklar):</span>
+            <span style="font-weight: 600; color: #0045d8;">${totalClients} ta</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px;">
+            <span style="color: #6b7280;">PlayStation sessiyalar:</span>
+            <span style="font-weight: 600; color: #0045d8;">${totalSessions} ta</span>
+          </div>
+        </div>
+
+        <h4 style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">PlayStation tushumi</h4>
+        <div style="margin-bottom: 16px; padding: 0 4px;">
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+            <span>PS4 (${ps4Count} ta seans, ${ps4Hours.toFixed(1)} soat)</span>
+            <span>${formatMoney(ps4Amount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+            <span>PS5 (${ps5Count} ta seans, ${ps5Hours.toFixed(1)} soat)</span>
+            <span>${formatMoney(ps5Amount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+            <span>VIP (${vipCount} ta seans, ${vipHours.toFixed(1)} soat)</span>
+            <span>${formatMoney(vipAmount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-top: 8px;">
+            <span>Jami PlayStation</span>
+            <span>${formatMoney(totalPlayAmount)}</span>
+          </div>
+        </div>
+
+        <h4 style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Ichimliklar & Boshqalar</h4>
+        <div style="margin-bottom: 16px; padding: 0 4px;">
+          ${drinksHtml}
+          <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-top: 8px; border-top: 1px dashed #e2e8f0; padding-top: 4px;">
+            <span>Jami ichimliklar</span>
+            <span>${formatMoney(totalDrinksAmount)}</span>
+          </div>
+        </div>
+
+        <h4 style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Kalyan</h4>
+        <div style="margin-bottom: 16px; padding: 0 4px;">
+          ${kalyanHtml}
+          <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-top: 4px;">
+            <span>Jami Kalyan</span>
+            <span>${formatMoney(totalKalyanAmount)}</span>
+          </div>
+        </div>
+
+        <div style="background: #1e293b; color: white; padding: 16px; border-radius: 12px; margin-top: 24px;">
+          <h4 style="font-size: 16px; text-align: center; margin-bottom: 12px; font-weight: 600; color: #94a3b8;">Yakuniy natija</h4>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;">
+            <span style="color: #cbd5e1;">PlayStation savdosi</span>
+            <span>${formatMoney(totalPlayAmount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;">
+            <span style="color: #cbd5e1;">Ichimlik savdosi</span>
+            <span>${formatMoney(totalDrinksAmount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px;">
+            <span style="color: #cbd5e1;">Kalyan savdosi</span>
+            <span>${formatMoney(totalKalyanAmount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; margin-bottom: 6px; border-top: 1px solid #334155; padding-top: 12px;">
+            <span>Umumiy savdo</span>
+            <span style="color: #38bdf8;">${formatMoney(totalSales)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 800;">
+            <span>Sof tushum (Foyda)</span>
+            <span style="color: #34d399;">${formatMoney(totalProfit)}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAdminShifts() {
+      const container = document.getElementById('shifts-history-list');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const storedShifts = localStorage.getItem('aura_shifts_history');
+      const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
+
+      if (shiftsHistory.length === 0) {
+        container.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #9ca3af;">Hozircha smena hisobotlari yo`q.</td></tr>';
+        return;
+      }
+
+      shiftsHistory.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+      shiftsHistory.forEach(s => {
+        const startDt = new Date(s.startTime);
+        const endDt = new Date(s.endTime);
+        const dateStr = startDt.toLocaleDateString('uz-UZ');
+        const sTime = startDt.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
+        const eTime = endDt.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
+        
+        const diffMs = endDt - startDt;
+        const diffH = Math.floor(diffMs / 3600000);
+        const diffM = Math.floor((diffMs % 3600000) / 60000);
+        const hoursStr = `${diffH}s ${diffM}d`;
+
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.innerHTML = `
+          <td><strong>${dateStr}</strong></td>
+          <td>${sTime}</td>
+          <td>${eTime}</td>
+          <td>${hoursStr}</td>
+          <td>${formatMoney(s.totalPlayAmount || 0)}</td>
+          <td>${formatMoney(s.totalDrinksAmount || 0)}</td>
+          <td>${formatMoney(s.totalKalyanAmount || 0)}</td>
+          <td style="color: #38bdf8; font-weight: 700;">${formatMoney(s.totalSales || 0)}</td>
+          <td style="color: #10b981; font-weight: 800;">${formatMoney(s.totalProfit || 0)}</td>
+        `;
+        
+        tr.addEventListener('click', () => {
+          const shiftReportBody = document.getElementById('shift-report-body');
+          if (shiftReportBody && typeof generateShiftReportHTML === 'function') {
+            shiftReportBody.innerHTML = generateShiftReportHTML(s);
+            document.getElementById('btn-save-shift').style.display = 'none'; // hide save button in readonly mode
+            document.getElementById('modal-shift-report').classList.add('active');
+          }
+        });
+        
+        container.appendChild(tr);
+      });
+    }
+
+    let currentCalculatedShift = null;
+
+    if (btnShiftToggle) {
+      btnShiftToggle.addEventListener('click', () => {
+        const activeShift = getActiveShift();
+        if (!activeShift) {
+          // Start Shift
+          setActiveShift({ startTime: new Date().toISOString() });
+          renderShiftToggle();
+          updateShiftTimer();
+          addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
+        } else {
+          // End Shift
+          const endTime = new Date().toISOString();
+          const startDt = new Date(activeShift.startTime);
+          
+          // Calculate stats
+          const shiftOrders = orders.filter(o => new Date(o.timestamp) >= startDt);
+          
+          let ps4Amount = 0, ps4Hours = 0, ps4Count = 0;
+          let ps5Amount = 0, ps5Hours = 0, ps5Count = 0;
+          let vipAmount = 0, vipHours = 0, vipCount = 0;
+          
+          const drinksMap = {};
+          const kalyanMap = {};
+          let totalDrinksAmount = 0;
+          let totalKalyanAmount = 0;
+          let totalKalyanProfit = 0;
+
+          shiftOrders.forEach(o => {
+            // Sessions
+            if (o.playAmount > 0) {
+              const cabin = cabins.find(c => c.id === o.cabinId);
+              let cType = cabin ? cabin.type : 'PS4';
+              let isVip = cabin && cabin.id === 'VIP';
+              const durationH = o.durationMins ? (o.durationMins / 60) : 0;
+              
+              if (isVip) {
+                vipAmount += o.playAmount; vipHours += durationH; vipCount++;
+              } else if (cType === 'PS5') {
+                ps5Amount += o.playAmount; ps5Hours += durationH; ps5Count++;
+              } else {
+                ps4Amount += o.playAmount; ps4Hours += durationH; ps4Count++;
+              }
+            }
+            
+            // Products
+            if (o.products && o.products.length > 0) {
+              o.products.forEach(p => {
+                const prodSum = p.price * p.quantity;
+                if (p.category === 'Kalyanlar') {
+                  const prodObj = PRODUCTS_LIST.find(pl => pl.id === p.id);
+                  const pProfit = prodObj ? (prodObj.adminProfit * p.quantity) : prodSum;
+                  totalKalyanAmount += prodSum;
+                  totalKalyanProfit += pProfit;
+                  if (!kalyanMap[p.id]) kalyanMap[p.id] = { name: p.name, qty: 0, total: 0, profit: 0 };
+                  kalyanMap[p.id].qty += p.quantity;
+                  kalyanMap[p.id].total += prodSum;
+                  kalyanMap[p.id].profit += pProfit;
+                } else {
+                  totalDrinksAmount += prodSum;
+                  if (!drinksMap[p.id]) drinksMap[p.id] = { name: p.name, qty: 0, total: 0 };
+                  drinksMap[p.id].qty += p.quantity;
+                  drinksMap[p.id].total += prodSum;
+                }
+              });
+            }
+          });
+
+          const totalPlayAmount = ps4Amount + ps5Amount + vipAmount;
+          const totalSales = totalPlayAmount + totalDrinksAmount + totalKalyanAmount;
+          const totalProfit = totalPlayAmount + totalDrinksAmount + totalKalyanProfit;
+
+          currentCalculatedShift = {
+            id: 'SHIFT-' + Date.now(),
+            startTime: activeShift.startTime,
+            endTime: endTime,
+            ps4Amount, ps4Hours, ps4Count,
+            ps5Amount, ps5Hours, ps5Count,
+            vipAmount, vipHours, vipCount,
+            totalPlayAmount,
+            drinksList: Object.values(drinksMap),
+            totalDrinksAmount,
+            kalyanList: Object.values(kalyanMap),
+            totalKalyanAmount,
+            totalKalyanProfit,
+            totalSales,
+            totalProfit,
+            totalClients: shiftOrders.length,
+            totalSessions: ps4Count + ps5Count + vipCount
+          };
+
+          shiftReportBody.innerHTML = generateShiftReportHTML(currentCalculatedShift);
+          document.getElementById('btn-save-shift').style.display = 'block'; // ensure save button is visible
+          modalShiftReport.classList.add('active');
+        }
+      });
+    }
+
+    if (btnSaveShift) {
+      btnSaveShift.addEventListener('click', () => {
+        if (!currentCalculatedShift) return;
+        
+        // Save to shifts history
+        const storedShifts = localStorage.getItem('aura_shifts_history');
+        const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
+        shiftsHistory.push(currentCalculatedShift);
+        localStorage.setItem('aura_shifts_history', JSON.stringify(shiftsHistory));
+        
+        // Clear active shift
+        setActiveShift(null);
+        renderShiftToggle();
+        modalShiftReport.classList.remove('active');
+        addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi (Tushum: ' + formatMoney(currentCalculatedShift.totalProfit) + ')');
+        
+        if (typeof renderAdminShifts === 'function') renderAdminShifts();
+      });
+    }
+    
+    // Removed broken dynamic hook
+
     // ── PAGE LOAD INITIALIZER ──
     function initializePage() {
       console.log("AuraUI: Initializing page components...");
@@ -9384,3 +9877,5 @@
   </script>
 </body>
 </html>
+
+
