@@ -4338,6 +4338,7 @@
         </div>
         <div class="receipt-actions">
           <button class="btn-receipt-finish" id="btn-receipt-yakunlash">Yakunlash</button>
+        </div>
       </div>
     </div>
 
@@ -4360,6 +4361,7 @@
       </div>
     </div>
 
+  </div>
   </div> <!-- /app-container -->
 
   <!-- Admin App (full screen dashboard) -->
@@ -5032,6 +5034,7 @@
 
   <!-- JavaScript logic -->
   <script>
+
     // Initial Constants
     const CABINS_INITIAL = [
       { id: '01', name: 'Kabina 01', type: 'PS4', subtitle: 'Standart', pricePerHour: 20000, img: 'rasmlar/ps4.png' },
@@ -5251,13 +5254,20 @@
 
     // DYNAMIC TIMER UPDATE ENGINE
     function updateTimers() {
-      let changed = false;
       const now = new Date();
+      let hasActive = false;
+      let needGridRefresh = false;
 
       cabins.forEach(c => {
         if (c.status === "O'yinda" && c.session) {
+          hasActive = true;
           const start = new Date(c.session.startTime);
           
+          let statusClass = 'status-bosh';
+          let dotClass = 'dot-bosh';
+          let statusText = "Bo'sh";
+          let timerHTML = '';
+
           if (c.session.endTime) {
             // Limited time session
             const end = new Date(c.session.endTime);
@@ -5266,21 +5276,73 @@
             if (msLeft <= 0) {
               // Session expired
               c.session.remainingSeconds = 0;
+              statusClass = 'status-band';
+              dotClass = 'dot-band';
+              statusText = `Tugadi`;
+              timerHTML = `<div class="cabin-timer timer-overdue">00:00:00</div>`;
             } else {
-              c.session.remainingSeconds = Math.max(0, Math.floor(msLeft / 1000));
+              const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
+              c.session.remainingSeconds = secondsLeft;
+              const hours = Math.floor(secondsLeft / 3600);
+              const minutes = Math.floor((secondsLeft % 3600) / 60);
+              const seconds = secondsLeft % 60;
+              const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+              
+              if (secondsLeft <= 300 && secondsLeft > 0) {
+                statusClass = 'status-warning';
+                dotClass = 'dot-warning';
+                statusText = `${Math.ceil(secondsLeft / 60)} daqiqa`;
+                timerHTML = `<div class="cabin-timer timer-warning">${timeStr}</div>`;
+              } else {
+                statusClass = 'status-oyinda';
+                dotClass = 'dot-oyinda';
+                statusText = `O'yinda`;
+                timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
+              }
             }
           } else {
             // Unlimited time session: Timer counts UP
             const msElapsed = now - start;
-            c.session.elapsedSeconds = Math.floor(msElapsed / 1000);
+            const secs = Math.floor(msElapsed / 1000);
+            c.session.elapsedSeconds = secs;
+            const hours = Math.floor(secs / 3600);
+            const minutes = Math.floor((secs % 3600) / 60);
+            const seconds = secs % 60;
+            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+            statusClass = 'status-oyinda';
+            dotClass = 'dot-oyinda';
+            statusText = `Cheksiz`;
+            timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
           }
-          changed = true;
+          
+          // Direct DOM Update — only if we're on the cabins view
+          const badgeEl = document.getElementById(`cabin-badge-${c.id}`);
+          const dotEl = document.getElementById(`cabin-dot-${c.id}`);
+          const textEl = document.getElementById(`cabin-status-text-${c.id}`);
+          const timerEl = document.getElementById(`cabin-timer-container-${c.id}`);
+          
+          if (badgeEl && dotEl && textEl && timerEl) {
+            badgeEl.className = `cabin-status-badge ${statusClass}`;
+            dotEl.className = `cabin-dot ${dotClass}`;
+            textEl.innerText = statusText;
+            timerEl.innerHTML = timerHTML;
+          } else {
+            // Elements not in DOM (e.g. view switched) — flag for refresh on next render
+            needGridRefresh = true;
+          }
         }
       });
 
-      if (changed) {
-        renderCabinsGrid();
+      if (hasActive) {
         updateActiveCabinDetailsView();
+      }
+      
+      // If grid elements are stale and we are currently on kabinalar view, re-render
+      if (needGridRefresh) {
+        const kabinalarView = document.getElementById('view-kabinalar');
+        if (kabinalarView && kabinalarView.classList.contains('active')) {
+          renderCabinsGrid();
+        }
       }
     }
 
@@ -5374,9 +5436,9 @@
         card.innerHTML = `
           <div class="cabin-card-header">
             <span class="cabin-number">${c.id === 'VIP' ? 'VIP' : c.id}</span>
-            <div class="cabin-status-badge ${statusClass}">
-              <span class="cabin-dot ${dotClass}"></span>
-              <span>${statusText}</span>
+            <div id="cabin-badge-${c.id}" class="cabin-status-badge ${statusClass}">
+              <span id="cabin-dot-${c.id}" class="cabin-dot ${dotClass}"></span>
+              <span id="cabin-status-text-${c.id}">${statusText}</span>
             </div>
           </div>
           <div class="cabin-img-container">
@@ -5384,7 +5446,9 @@
           </div>
           <div class="cabin-console-name">${c.type}</div>
           <div class="cabin-console-type">${c.subtitle}</div>
-          ${timerHTML}
+          <div id="cabin-timer-container-${c.id}" style="width: 100%; display: flex; justify-content: center;">
+            ${timerHTML}
+          </div>
           <button class="cabin-card-btn ${isBosh ? 'btn-boshlash' : 'btn-batafsil'}" data-id="${c.id}">
             ${isBosh ? 'Boshlash' : 'Batafsil'}
           </button>
@@ -9486,27 +9550,290 @@
     }
 
 
-    // ── GENERAL MODALS CONTROLLER ──
-
-    document.querySelectorAll('.btn-close-modal').forEach(btn => {
-      btn.addEventListener('click', closeAllModals);
-    });
-
-    document.querySelectorAll('.modal-overlay').forEach(overlay => {
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-          closeAllModals();
-        }
-      });
-    });
-
-
     // ── SHIFT MANAGEMENT SYSTEM ──
-    const btnShiftToggle = document.getElementById('btn-shift-toggle');
-    const shiftTimerDisplay = document.getElementById('shift-timer-display');
-    const modalShiftReport = document.getElementById('modal-shift-report');
-    const shiftReportBody = document.getElementById('shift-report-body');
-    const btnSaveShift = document.getElementById('btn-save-shift');
+    var btnShiftToggle = document.getElementById('btn-shift-toggle');
+    var shiftTimerDisplay = document.getElementById('shift-timer-display');
+    var modalShiftReport = document.getElementById('modal-shift-report');
+    var shiftReportBody = document.getElementById('shift-report-body');
+    var btnSaveShift = document.getElementById('btn-save-shift');
+
+    function getActiveShift() {
+      const s = localStorage.getItem('aura_active_shift');
+      if (!s) return null;
+      try {
+        return JSON.parse(s);
+      } catch (e) {
+        console.error("Corrupted active shift data in localStorage. Clearing it.", e);
+        localStorage.removeItem('aura_active_shift');
+        return null;
+      }
+    }
+
+    function setActiveShift(shiftObj) {
+      if (shiftObj) {
+        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
+      } else {
+        localStorage.removeItem('aura_active_shift');
+      }
+    }
+
+    function renderShiftToggle() {
+      if (!btnShiftToggle) return;
+      const activeShift = getActiveShift();
+      if (activeShift) {
+        btnShiftToggle.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
+        btnShiftToggle.style.background = '#ef4444';
+        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
+        shiftTimerDisplay.style.display = 'block';
+      } else {
+        btnShiftToggle.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
+        btnShiftToggle.style.background = '#0045d8';
+        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
+        shiftTimerDisplay.style.display = 'none';
+      }
+      lucide.createIcons();
+    }
+
+    function updateShiftTimer() {
+      const activeShift = getActiveShift();
+      if (activeShift && shiftTimerDisplay) {
+        const now = new Date();
+        const start = new Date(activeShift.startTime);
+        const diffSecs = Math.floor((now - start) / 1000);
+        
+        const h = Math.floor(diffSecs / 3600).toString().padStart(2, '0');
+        const m = Math.floor((diffSecs % 3600) / 60).toString().padStart(2, '0');
+        const s = (diffSecs % 60).toString().padStart(2, '0');
+        
+        shiftTimerDisplay.innerText = `Ish vaqti: ${h}:${m}:${s}`;
+      }
+    }
+
+    function generateShiftReportHTML(shiftData) {
+      const { 
+        startTime, endTime, 
+        ps4Amount, ps4Hours, ps4Count,
+        ps5Amount, ps5Hours, ps5Count,
+        vipAmount, vipHours, vipCount,
+        totalPlayAmount, drinksList, totalDrinksAmount,
+        kalyanList, totalKalyanAmount, totalKalyanProfit,
+        totalSales, totalProfit, totalClients, totalSessions
+      } = shiftData;
+
+      const formatDt = d => new Date(d).toLocaleString('uz-UZ', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'});
+      const diffMs = new Date(endTime) - new Date(startTime);
+      const diffH = Math.floor(diffMs / 3600000);
+      const diffM = Math.floor((diffMs % 3600000) / 60000);
+
+      let drinksHtml = drinksList.map(d => `
+        <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+          <span>${d.name} (${d.qty} dona)</span>
+          <span>${formatMoney(d.total)}</span>
+        </div>
+      `).join('');
+      if (!drinksHtml) drinksHtml = '<div style="font-size: 13px; color: #9ca3af; font-style: italic;">Sotuv bo\'lmagan</div>';
+
+      let kalyanHtml = kalyanList.map(k => `
+        <div style="font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px;">
+          <div style="display: flex; justify-content: space-between; font-weight: 600;">
+            <span>${k.name} (${k.qty} dona)</span>
+            <span>${formatMoney(k.total)}</span>
+          </div>
+          <div style="color: #10b981; font-size: 12px; text-align: right;">Foyda: ${formatMoney(k.profit)}</div>
+        </div>
+      `).join('');
+      if (!kalyanHtml) kalyanHtml = '<div style="font-size: 13px; color: #9ca3af; font-style: italic;">Sotuv bo\'lmagan</div>';
+
+      return `
+        <div style="background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
+            <span style="color: #6b7280;">Boshlangan:</span>
+            <span style="font-weight: 600;">${formatDt(startTime)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
+            <span style="color: #6b7280;">Tugagan:</span>
+            <span style="font-weight: 600;">${formatDt(endTime)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px;">
+            <span style="color: #6b7280;">Jami ishlagan:</span>
+            <span style="font-weight: 600;">${diffH} soat ${diffM} daqiqa</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px;">
+            <span style="color: #6b7280;">Xizmat ko'rsatilgan mijozlar (Cheklar):</span>
+            <span style="font-weight: 600; color: #0045d8;">${totalClients} ta</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px;">
+            <span style="color: #6b7280;">PlayStation sessiyalar:</span>
+            <span style="font-weight: 600; color: #0045d8;">${totalSessions} ta</span>
+          </div>
+        </div>
+
+        <h4 style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">PlayStation tushumi</h4>
+        <div style="margin-bottom: 16px; padding: 0 4px;">
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+            <span>PS4 (${ps4Count} ta seans, ${ps4Hours.toFixed(1)} soat)</span>
+            <span>${formatMoney(ps4Amount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+            <span>PS5 (${ps5Count} ta seans, ${ps5Hours.toFixed(1)} soat)</span>
+            <span>${formatMoney(ps5Amount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+            <span>VIP (${vipCount} ta seans, ${vipHours.toFixed(1)} soat)</span>
+            <span>${formatMoney(vipAmount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-top: 8px;">
+            <span>Jami PlayStation</span>
+            <span>${formatMoney(totalPlayAmount)}</span>
+          </div>
+        </div>
+
+        <h4 style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Mahsulotlar savdosi</h4>
+        <div style="margin-bottom: 16px; padding: 0 4px;">
+          ${drinksHtml}
+          <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-top: 8px; border-top: 1px dashed #e2e8f0; padding-top: 4px;">
+            <span>Jami mahsulotlar</span>
+            <span>${formatMoney(totalDrinksAmount)}</span>
+          </div>
+        </div>
+
+        <div style="background: #1e293b; color: white; padding: 16px; border-radius: 12px; margin-top: 24px;">
+          <h4 style="font-size: 16px; text-align: center; margin-bottom: 12px; font-weight: 600; color: #94a3b8;">Yakuniy natija</h4>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;">
+            <span style="color: #cbd5e1;">PlayStation savdosi</span>
+            <span>${formatMoney(totalPlayAmount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;">
+            <span style="color: #cbd5e1;">Mahsulotlar savdosi</span>
+            <span>${formatMoney(totalDrinksAmount)}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; margin-bottom: 6px; border-top: 1px solid #334155; padding-top: 12px;">
+            <span>Umumiy savdo</span>
+            <span style="color: #38bdf8;">${formatMoney(totalSales)}</span>
+          </div>
+          
+        </div>
+      `;
+    }
+
+    function renderAdminShifts() {
+      const container = document.getElementById('shifts-history-list');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const storedShifts = localStorage.getItem('aura_shifts_history');
+      const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
+
+      if (shiftsHistory.length === 0) {
+        container.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #9ca3af;">Hozircha smena hisobotlari yo`q.</td></tr>';
+        return;
+      }
+
+      shiftsHistory.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+      shiftsHistory.forEach(s => {
+        const startDt = new Date(s.startTime);
+        const endDt = new Date(s.endTime);
+        const dateStr = startDt.toLocaleDateString('uz-UZ');
+        const sTime = startDt.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
+        const eTime = endDt.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
+        
+        const diffMs = endDt - startDt;
+        const diffH = Math.floor(diffMs / 3600000);
+        const diffM = Math.floor((diffMs % 3600000) / 60000);
+        const hoursStr = `${diffH}s ${diffM}d`;
+
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.innerHTML = `
+          <td><strong>${dateStr}</strong></td>
+          <td>${sTime}</td>
+          <td>${eTime}</td>
+          <td>${hoursStr}</td>
+          <td>${formatMoney(s.totalPlayAmount || 0)}</td>
+          <td>${formatMoney(s.totalDrinksAmount || 0)}</td>
+          <td>${formatMoney(s.totalKalyanAmount || 0)}</td>
+          <td style="color: #38bdf8; font-weight: 700;">${formatMoney(s.totalSales || 0)}</td>
+          <td style="color: #10b981; font-weight: 800;">${formatMoney(s.totalProfit || 0)}</td>
+        `;
+        
+        tr.addEventListener('click', () => {
+          var shiftReportBody = document.getElementById('shift-report-body');
+          if (shiftReportBody && typeof generateShiftReportHTML === 'function') {
+            shiftReportBody.innerHTML = generateShiftReportHTML(s);
+            document.getElementById('btn-save-shift').style.display = 'none'; // hide save button in readonly mode
+            document.getElementById('modal-shift-report').classList.add('active');
+          }
+        });
+        
+        container.appendChild(tr);
+      });
+    }
+
+    var currentCalculatedShift = null;
+
+
+
+
+    
+    // Removed broken dynamic hook
+
+    // ── PAGE LOAD INITIALIZER ──
+    function initializePage() {
+      console.log("AuraUI: Initializing page components...");
+      loadDB();
+      AuraUI.initAll();
+      
+      // Set current date on header
+      const now = new Date();
+      const dStr = now.toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' });
+      const dateHeader = document.getElementById('current-date');
+      if (dateHeader) {
+        dateHeader.innerText = `Bugun: ${dStr}`;
+      }
+      
+      // Restore session state
+      const loggedRole = sessionStorage.getItem('aura_logged_role');
+      if (loggedRole === 'worker') {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('admin-app').style.display = 'none';
+        const returnBar = document.getElementById('admin-return-bar');
+        if (returnBar) returnBar.style.display = 'none';
+        
+        if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
+        if (typeof showView === 'function') showView('view-kabinalar');
+        if (typeof renderShiftToggle === 'function') renderShiftToggle();
+        if (typeof startTimerLoop === 'function') startTimerLoop();
+      } else if (loggedRole === 'admin') {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('admin-app').style.display = 'flex';
+        renderDashboard();
+      } else {
+        // Not logged in, show splash
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'flex';
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('admin-app').style.display = 'none';
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', initializePage);
+    } else {
+      initializePage();
+    }
+  
+    // ── SHIFT MANAGEMENT SYSTEM ──
+    var btnShiftToggle = document.getElementById('btn-shift-toggle');
+    var shiftTimerDisplay = document.getElementById('shift-timer-display');
+    var modalShiftReport = document.getElementById('modal-shift-report');
+    var shiftReportBody = document.getElementById('shift-report-body');
+    var btnSaveShift = document.getElementById('btn-save-shift');
 
     function getActiveShift() {
       const s = localStorage.getItem('aura_active_shift');
@@ -9632,11 +9959,11 @@
           </div>
         </div>
 
-        <h4 style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Ichimliklar & Boshqalar</h4>
+        <h4 style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">Mahsulotlar savdosi</h4>
         <div style="margin-bottom: 16px; padding: 0 4px;">
           ${drinksHtml}
           <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-top: 8px; border-top: 1px dashed #e2e8f0; padding-top: 4px;">
-            <span>Jami ichimliklar</span>
+            <span>Jami mahsulotlar</span>
             <span>${formatMoney(totalDrinksAmount)}</span>
           </div>
         </div>
@@ -9657,7 +9984,7 @@
             <span>${formatMoney(totalPlayAmount)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;">
-            <span style="color: #cbd5e1;">Ichimlik savdosi</span>
+            <span style="color: #cbd5e1;">Mahsulotlar savdosi</span>
             <span>${formatMoney(totalDrinksAmount)}</span>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px;">
@@ -9676,206 +10003,149 @@
       `;
     }
 
-    function renderAdminShifts() {
-      const container = document.getElementById('shifts-history-list');
-      if (!container) return;
-      container.innerHTML = '';
+    var currentCalculatedShift = null;
 
-      const storedShifts = localStorage.getItem('aura_shifts_history');
-      const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
-
-      if (shiftsHistory.length === 0) {
-        container.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #9ca3af;">Hozircha smena hisobotlari yo`q.</td></tr>';
-        return;
-      }
-
-      shiftsHistory.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
-
-      shiftsHistory.forEach(s => {
-        const startDt = new Date(s.startTime);
-        const endDt = new Date(s.endTime);
-        const dateStr = startDt.toLocaleDateString('uz-UZ');
-        const sTime = startDt.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
-        const eTime = endDt.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
-        
-        const diffMs = endDt - startDt;
-        const diffH = Math.floor(diffMs / 3600000);
-        const diffM = Math.floor((diffMs % 3600000) / 60000);
-        const hoursStr = `${diffH}s ${diffM}d`;
-
-        const tr = document.createElement('tr');
-        tr.style.cursor = 'pointer';
-        tr.innerHTML = `
-          <td><strong>${dateStr}</strong></td>
-          <td>${sTime}</td>
-          <td>${eTime}</td>
-          <td>${hoursStr}</td>
-          <td>${formatMoney(s.totalPlayAmount || 0)}</td>
-          <td>${formatMoney(s.totalDrinksAmount || 0)}</td>
-          <td>${formatMoney(s.totalKalyanAmount || 0)}</td>
-          <td style="color: #38bdf8; font-weight: 700;">${formatMoney(s.totalSales || 0)}</td>
-          <td style="color: #10b981; font-weight: 800;">${formatMoney(s.totalProfit || 0)}</td>
-        `;
-        
-        tr.addEventListener('click', () => {
-          const shiftReportBody = document.getElementById('shift-report-body');
-          if (shiftReportBody && typeof generateShiftReportHTML === 'function') {
-            shiftReportBody.innerHTML = generateShiftReportHTML(s);
-            document.getElementById('btn-save-shift').style.display = 'none'; // hide save button in readonly mode
-            document.getElementById('modal-shift-report').classList.add('active');
-          }
-        });
-        
-        container.appendChild(tr);
-      });
+    function startShift() {
+      setActiveShift({ startTime: new Date().toISOString() });
+      renderShiftToggle();
+      updateShiftTimer();
+      addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
     }
 
-    let currentCalculatedShift = null;
+    function finishShift() {
+      const activeShift = getActiveShift();
+      if (!activeShift) return;
+      const endTime = new Date().toISOString();
+      const startDt = new Date(activeShift.startTime);
+      
+      const shiftOrders = orders.filter(o => new Date(o.timestamp) >= startDt);
+      
+      let ps4Amount = 0, ps4Hours = 0, ps4Count = 0;
+      let ps5Amount = 0, ps5Hours = 0, ps5Count = 0;
+      let vipAmount = 0, vipHours = 0, vipCount = 0;
+      
+      const drinksMap = {};
+      const kalyanMap = {};
+      let totalDrinksAmount = 0;
+      let totalKalyanAmount = 0;
+      let totalKalyanProfit = 0;
+
+      shiftOrders.forEach(o => {
+        if (o.playAmount > 0) {
+          const cabin = cabins.find(c => c.id === o.cabinId);
+          let cType = cabin ? cabin.type : 'PS4';
+          let isVip = cabin && cabin.id === 'VIP';
+          const durationH = o.durationMins ? (o.durationMins / 60) : 0;
+          
+          if (isVip) {
+            vipAmount += o.playAmount; vipHours += durationH; vipCount++;
+          } else if (cType === 'PS5') {
+            ps5Amount += o.playAmount; ps5Hours += durationH; ps5Count++;
+          } else {
+            ps4Amount += o.playAmount; ps4Hours += durationH; ps4Count++;
+          }
+        }
+        
+        if (o.products && o.products.length > 0) {
+          o.products.forEach(p => {
+            const prodSum = p.price * p.quantity;
+            if (p.category === 'Kalyanlar') {
+              const prodObj = PRODUCTS_LIST.find(pl => pl.id === p.id);
+              const pProfit = prodObj ? (prodObj.adminProfit * p.quantity) : prodSum;
+              totalKalyanAmount += prodSum;
+              totalKalyanProfit += pProfit;
+              if (!kalyanMap[p.id]) kalyanMap[p.id] = { name: p.name, qty: 0, total: 0, profit: 0 };
+              kalyanMap[p.id].qty += p.quantity;
+              kalyanMap[p.id].total += prodSum;
+              kalyanMap[p.id].profit += pProfit;
+            } else {
+              totalDrinksAmount += prodSum;
+              if (!drinksMap[p.id]) drinksMap[p.id] = { name: p.name, qty: 0, total: 0 };
+              drinksMap[p.id].qty += p.quantity;
+              drinksMap[p.id].total += prodSum;
+            }
+          });
+        }
+      });
+
+      const totalPlayAmount = ps4Amount + ps5Amount + vipAmount;
+      const totalSales = totalPlayAmount + totalDrinksAmount + totalKalyanAmount;
+      const totalProfit = totalPlayAmount + totalDrinksAmount + totalKalyanProfit;
+
+      currentCalculatedShift = {
+        id: 'SHIFT-' + Date.now(),
+        startTime: activeShift.startTime,
+        endTime: endTime,
+        ps4Amount, ps4Hours, ps4Count,
+        ps5Amount, ps5Hours, ps5Count,
+        vipAmount, vipHours, vipCount,
+        totalPlayAmount,
+        drinksList: Object.values(drinksMap),
+        totalDrinksAmount,
+        kalyanList: Object.values(kalyanMap),
+        totalKalyanAmount,
+        totalKalyanProfit,
+        totalSales,
+        totalProfit,
+        totalClients: shiftOrders.length,
+        totalSessions: ps4Count + ps5Count + vipCount
+      };
+
+      shiftReportBody.innerHTML = generateShiftReportHTML(currentCalculatedShift);
+      modalShiftReport.classList.add('active');
+    }
 
     if (btnShiftToggle) {
       btnShiftToggle.addEventListener('click', () => {
         const activeShift = getActiveShift();
         if (!activeShift) {
-          // Start Shift
-          setActiveShift({ startTime: new Date().toISOString() });
-          renderShiftToggle();
-          updateShiftTimer();
-          addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
+          startShift();
         } else {
-          // End Shift
-          const endTime = new Date().toISOString();
-          const startDt = new Date(activeShift.startTime);
-          
-          // Calculate stats
-          const shiftOrders = orders.filter(o => new Date(o.timestamp) >= startDt);
-          
-          let ps4Amount = 0, ps4Hours = 0, ps4Count = 0;
-          let ps5Amount = 0, ps5Hours = 0, ps5Count = 0;
-          let vipAmount = 0, vipHours = 0, vipCount = 0;
-          
-          const drinksMap = {};
-          const kalyanMap = {};
-          let totalDrinksAmount = 0;
-          let totalKalyanAmount = 0;
-          let totalKalyanProfit = 0;
-
-          shiftOrders.forEach(o => {
-            // Sessions
-            if (o.playAmount > 0) {
-              const cabin = cabins.find(c => c.id === o.cabinId);
-              let cType = cabin ? cabin.type : 'PS4';
-              let isVip = cabin && cabin.id === 'VIP';
-              const durationH = o.durationMins ? (o.durationMins / 60) : 0;
-              
-              if (isVip) {
-                vipAmount += o.playAmount; vipHours += durationH; vipCount++;
-              } else if (cType === 'PS5') {
-                ps5Amount += o.playAmount; ps5Hours += durationH; ps5Count++;
-              } else {
-                ps4Amount += o.playAmount; ps4Hours += durationH; ps4Count++;
-              }
-            }
-            
-            // Products
-            if (o.products && o.products.length > 0) {
-              o.products.forEach(p => {
-                const prodSum = p.price * p.quantity;
-                if (p.category === 'Kalyanlar') {
-                  const prodObj = PRODUCTS_LIST.find(pl => pl.id === p.id);
-                  const pProfit = prodObj ? (prodObj.adminProfit * p.quantity) : prodSum;
-                  totalKalyanAmount += prodSum;
-                  totalKalyanProfit += pProfit;
-                  if (!kalyanMap[p.id]) kalyanMap[p.id] = { name: p.name, qty: 0, total: 0, profit: 0 };
-                  kalyanMap[p.id].qty += p.quantity;
-                  kalyanMap[p.id].total += prodSum;
-                  kalyanMap[p.id].profit += pProfit;
-                } else {
-                  totalDrinksAmount += prodSum;
-                  if (!drinksMap[p.id]) drinksMap[p.id] = { name: p.name, qty: 0, total: 0 };
-                  drinksMap[p.id].qty += p.quantity;
-                  drinksMap[p.id].total += prodSum;
-                }
-              });
-            }
-          });
-
-          const totalPlayAmount = ps4Amount + ps5Amount + vipAmount;
-          const totalSales = totalPlayAmount + totalDrinksAmount + totalKalyanAmount;
-          const totalProfit = totalPlayAmount + totalDrinksAmount + totalKalyanProfit;
-
-          currentCalculatedShift = {
-            id: 'SHIFT-' + Date.now(),
-            startTime: activeShift.startTime,
-            endTime: endTime,
-            ps4Amount, ps4Hours, ps4Count,
-            ps5Amount, ps5Hours, ps5Count,
-            vipAmount, vipHours, vipCount,
-            totalPlayAmount,
-            drinksList: Object.values(drinksMap),
-            totalDrinksAmount,
-            kalyanList: Object.values(kalyanMap),
-            totalKalyanAmount,
-            totalKalyanProfit,
-            totalSales,
-            totalProfit,
-            totalClients: shiftOrders.length,
-            totalSessions: ps4Count + ps5Count + vipCount
-          };
-
-          shiftReportBody.innerHTML = generateShiftReportHTML(currentCalculatedShift);
-          document.getElementById('btn-save-shift').style.display = 'block'; // ensure save button is visible
-          modalShiftReport.classList.add('active');
+          finishShift();
         }
       });
     }
 
     if (btnSaveShift) {
       btnSaveShift.addEventListener('click', () => {
-        if (!currentCalculatedShift) return;
+        if (!currentCalculatedShift || btnSaveShift.disabled) return;
         
+        btnSaveShift.disabled = true;
+        const previousText = btnSaveShift.innerHTML;
+        btnSaveShift.innerHTML = 'Saqlanmoqda...';
+
         // Save to shifts history
         const storedShifts = localStorage.getItem('aura_shifts_history');
         const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
         shiftsHistory.push(currentCalculatedShift);
         localStorage.setItem('aura_shifts_history', JSON.stringify(shiftsHistory));
         
-        // Clear active shift
+        // Clear active shift and calculated data to prevent resubmission
         setActiveShift(null);
+        currentCalculatedShift = null;
+        
         renderShiftToggle();
         modalShiftReport.classList.remove('active');
-        addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi (Tushum: ' + formatMoney(currentCalculatedShift.totalProfit) + ')');
+        addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi');
         
+        // Refresh admin side if needed
         if (typeof renderAdminShifts === 'function') renderAdminShifts();
+
+        // Restore button state
+        setTimeout(() => {
+          btnSaveShift.disabled = false;
+          btnSaveShift.innerHTML = previousText;
+        }, 1000);
       });
     }
     
-    // Removed broken dynamic hook
-
-    // ── PAGE LOAD INITIALIZER ──
-    function initializePage() {
-      console.log("AuraUI: Initializing page components...");
-      loadDB();
-      AuraUI.initAll();
-      
-      // Set current date on header
-      const now = new Date();
-      const dStr = now.toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' });
-      const dateHeader = document.getElementById('current-date');
-      if (dateHeader) {
-        dateHeader.innerText = `Bugun: ${dStr}`;
-      }
-      
-      // Render dashboard by default
-      renderDashboard();
-    }
-
+    // Initial Render
     if (document.readyState === 'loading') {
-      window.addEventListener('DOMContentLoaded', initializePage);
+      document.addEventListener('DOMContentLoaded', renderShiftToggle);
     } else {
-      initializePage();
+      renderShiftToggle();
     }
+
   </script>
 </body>
 </html>
-
-
