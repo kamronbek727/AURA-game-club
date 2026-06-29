@@ -5075,6 +5075,10 @@
     let receiptCounter = 1;
     let prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
     let logs = [];
+    let shiftsHistory = [];
+    let activeShift = null;
+    let adminPassword = 'admin';
+    let workerPassword = '1111';
 
     let activeCabinId = null;
     let selectedProductsCart = {}; // {productId: qty} for the active cabin's product selection screen
@@ -5096,234 +5100,220 @@
 
     // Database load/save helper
     function loadDB() {
-      // Sync prices
-      const storedPrices = localStorage.getItem('aura_prices_data');
-      if (storedPrices) {
-        try {
-          prices = JSON.parse(storedPrices);
-        } catch (e) {
-          console.error("Failed to parse prices data from localStorage:", e);
-          prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
-        }
-      } else {
-        prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
-        localStorage.setItem('aura_prices_data', JSON.stringify(prices));
-      }
-
-      // Rebuild cabins to match all stored cabins and apply correct synced prices
-      const storedCabins = localStorage.getItem('aura_cabins_data');
-      if (storedCabins) {
-        let loadedCabins = JSON.parse(storedCabins);
-        cabins = loadedCabins.map(c => {
-          let price = c.pricePerHour;
-          if (c.id === 'VIP') {
-            price = prices.VIP;
-          } else if (prices[c.type]) {
-            price = prices[c.type];
-          }
-          c.pricePerHour = price;
-          return c;
-        });
-      } else {
-        cabins = CABINS_INITIAL.map(c => {
-          let price = c.pricePerHour;
-          if (c.id === 'VIP') {
-            price = prices.VIP;
-          } else if (prices[c.type]) {
-            price = prices[c.type];
-          }
-          return {
-            ...c,
-            pricePerHour: price,
-            status: "Bo'sh",
-            session: null
-          };
-        });
-        saveDB();
-      }
-
-      const storedOrders = localStorage.getItem('aura_orders_data');
-      if (storedOrders) {
-        orders = JSON.parse(storedOrders);
-      } else {
-        orders = [];
-        saveDB();
-      }
-
-      const storedReceiptCounter = localStorage.getItem('aura_receipt_counter');
-      if (storedReceiptCounter) {
-        receiptCounter = parseInt(storedReceiptCounter, 10);
-      } else {
-        receiptCounter = 1;
-        saveDB();
-      }
-
-      // Sync products list from localStorage
-      const storedProducts = localStorage.getItem('aura_products_data');
-      if (storedProducts) {
-        const loadedProducts = JSON.parse(storedProducts);
-        
-        const defaultProds = [
-          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
-        ];
-        defaultProds.forEach(dp => {
-          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
-        });
-
-        PRODUCTS_LIST.length = 0;
-        loadedProducts.forEach(p => {
-          if (p.stock === undefined) p.stock = 20;
-          PRODUCTS_LIST.push(p);
-        });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      } else {
-        PRODUCTS_LIST.forEach(p => {
-          if (p.stock === undefined) {
-            p.stock = 20;
-          }
-        });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      }
-
-      // Sync logs
-      const storedLogs = localStorage.getItem('aura_logs_data');
-      if (storedLogs) {
-        try {
-          logs = JSON.parse(storedLogs);
-        } catch (e) {
-          console.error("Failed to parse logs data from localStorage:", e);
-          logs = [];
-        }
-      } else {
-        logs = [];
-      }
+      // Load local memory caches from default lists
+      cabins = CABINS_INITIAL.map(c => ({
+        ...c,
+        status: "Bo'sh",
+        session: null
+      }));
+      // PRODUCTS_LIST is already populated by default array
     }
 
-     function saveDB() {
-      localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
-      localStorage.setItem('aura_orders_data', JSON.stringify(orders));
-      localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
-      localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      localStorage.setItem('aura_prices_data', JSON.stringify(prices));
-      localStorage.setItem('aura_logs_data', JSON.stringify(logs));
-      
-      saveToSupabase();
+    function saveDB() {
+      // No-op in Supabase Realtime architecture
     }
 
-    async function saveToSupabase() {
+    function initSupabaseRealtime() {
       if (!supabaseClient) return;
-      try {
-        // 1. Sync cabins (upsert + delete missing)
-        if (cabins && cabins.length > 0) {
-          const { error: cabinUpsertErr } = await supabaseClient.from('cabins').upsert(cabins);
-          if (cabinUpsertErr) console.error("Error upserting cabins to Supabase:", cabinUpsertErr);
+
+      console.log("Supabase Realtime: Initializing channels...");
+
+      // 1. Cabins Realtime
+      supabaseClient.channel('public:cabins')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cabins' }, payload => {
+          console.log("Realtime Cabin update:", payload);
+          if (payload.eventType === 'INSERT') {
+            if (!cabins.find(c => c.id === payload.new.id)) {
+              cabins.push(payload.new);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const idx = cabins.findIndex(c => c.id === payload.new.id);
+            if (idx !== -1) cabins[idx] = payload.new;
+          } else if (payload.eventType === 'DELETE') {
+            cabins = cabins.filter(c => c.id !== payload.old.id);
+          }
           
-          const { data: dbCabins } = await supabaseClient.from('cabins').select('id');
-          if (dbCabins) {
-            const dbIds = dbCabins.map(r => r.id);
-            const localIds = cabins.map(c => c.id);
-            const toDelete = dbIds.filter(id => !localIds.includes(id));
-            if (toDelete.length > 0) {
-              await supabaseClient.from('cabins').delete().in('id', toDelete);
+          // Re-render views
+          renderCabinsGrid();
+          updateTimers();
+          if (activeCabinId && cabins.find(c => c.id === activeCabinId)) {
+            updateActiveCabinDetailsView();
+          }
+          if (typeof renderCabinsList === 'function') renderCabinsList();
+        })
+        .subscribe();
+
+      // 2. Products Realtime
+      supabaseClient.channel('public:products')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, payload => {
+          console.log("Realtime Product update:", payload);
+          if (payload.eventType === 'INSERT') {
+            if (!PRODUCTS_LIST.find(p => p.id === payload.new.id)) {
+              PRODUCTS_LIST.push(payload.new);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const idx = PRODUCTS_LIST.findIndex(p => p.id === payload.new.id);
+            if (idx !== -1) PRODUCTS_LIST[idx] = payload.new;
+          } else if (payload.eventType === 'DELETE') {
+            const idx = PRODUCTS_LIST.findIndex(p => p.id === payload.old.id);
+            if (idx !== -1) PRODUCTS_LIST.splice(idx, 1);
+          }
+          
+          // Re-render views
+          renderAdminProductsList();
+          renderCabinsGrid();
+          if (activeCabinId) {
+            updateActiveCabinDetailsView();
+          }
+        })
+        .subscribe();
+
+      // 3. Orders Realtime
+      supabaseClient.channel('public:orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
+          console.log("Realtime Order update:", payload);
+          if (payload.eventType === 'INSERT') {
+            if (!orders.find(o => o.id === payload.new.id)) {
+              orders.push(payload.new);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const idx = orders.findIndex(o => o.id === payload.new.id);
+            if (idx !== -1) orders[idx] = payload.new;
+          } else if (payload.eventType === 'DELETE') {
+            orders = orders.filter(o => o.id !== payload.old.id);
+          }
+          
+          // Re-render views
+          renderHistoryOrders();
+          renderDashboard();
+        })
+        .subscribe();
+
+      // 4. Shifts History Realtime
+      supabaseClient.channel('public:shifts_history')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts_history' }, payload => {
+          console.log("Realtime Shift update:", payload);
+          if (payload.eventType === 'INSERT') {
+            if (!shiftsHistory.find(s => s.id === payload.new.id)) {
+              shiftsHistory.push(payload.new);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const idx = shiftsHistory.findIndex(s => s.id === payload.new.id);
+            if (idx !== -1) shiftsHistory[idx] = payload.new;
+          } else if (payload.eventType === 'DELETE') {
+            shiftsHistory = shiftsHistory.filter(s => s.id !== payload.old.id);
+          }
+          
+          // Re-render views
+          renderAdminShifts();
+        })
+        .subscribe();
+
+      // 5. Logs Realtime
+      supabaseClient.channel('public:logs')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'logs' }, payload => {
+          console.log("Realtime Log update:", payload);
+          if (payload.eventType === 'INSERT') {
+            if (!logs.find(l => l.id === payload.new.id)) {
+              logs.push(payload.new);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const idx = logs.findIndex(l => l.id === payload.new.id);
+            if (idx !== -1) logs[idx] = payload.new;
+          } else if (payload.eventType === 'DELETE') {
+            logs = logs.filter(l => l.id !== payload.old.id);
+          }
+          
+          // Re-render views
+          renderLogsList();
+        })
+        .subscribe();
+
+      // 6. Settings Realtime (Prices, active shift, passwords, receipt counter)
+      supabaseClient.channel('public:settings')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, payload => {
+          console.log("Realtime Settings update:", payload);
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const key = payload.new.key;
+            const val = payload.new.value;
+            if (key === 'prices') {
+              prices = val;
+              syncCabinsAndPricesWithAdmin();
+              renderCabinsGrid();
+              if (typeof renderCabinsList === 'function') renderCabinsList();
+              if (typeof loadPricesForm === 'function') loadPricesForm();
+            } else if (key === 'active_shift') {
+              activeShift = val;
+              renderShiftToggle();
+              updateShiftTimer();
+            } else if (key === 'admin_password') {
+              adminPassword = val;
+            } else if (key === 'worker_password') {
+              workerPassword = val;
+            } else if (key === 'receipt_counter') {
+              receiptCounter = Number(val);
             }
           }
-        }
-
-        // 2. Sync products (upsert + delete missing)
-        if (PRODUCTS_LIST && PRODUCTS_LIST.length > 0) {
-          const { error: prodUpsertErr } = await supabaseClient.from('products').upsert(PRODUCTS_LIST);
-          if (prodUpsertErr) console.error("Error upserting products to Supabase:", prodUpsertErr);
-          
-          const { data: dbProds } = await supabaseClient.from('products').select('id');
-          if (dbProds) {
-            const dbIds = dbProds.map(r => r.id);
-            const localIds = PRODUCTS_LIST.map(p => p.id);
-            const toDelete = dbIds.filter(id => !localIds.includes(id));
-            if (toDelete.length > 0) {
-              await supabaseClient.from('products').delete().in('id', toDelete);
-            }
-          }
-        }
-
-        // 3. Sync orders (upsert)
-        if (orders && orders.length > 0) {
-          const { error: orderUpsertErr } = await supabaseClient.from('orders').upsert(orders);
-          if (orderUpsertErr) console.error("Error upserting orders to Supabase:", orderUpsertErr);
-        }
-
-        // 4. Sync shifts_history (upsert)
-        const storedShifts = localStorage.getItem('aura_shifts_history');
-        const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
-        if (shiftsHistory && shiftsHistory.length > 0) {
-          const { error: shiftUpsertErr } = await supabaseClient.from('shifts_history').upsert(shiftsHistory);
-          if (shiftUpsertErr) console.error("Error upserting shifts to Supabase:", shiftUpsertErr);
-        }
-
-        // 5. Sync logs (upsert + delete missing)
-        if (logs) {
-          const { error: logsUpsertErr } = await supabaseClient.from('logs').upsert(logs);
-          if (logsUpsertErr) console.error("Error upserting logs to Supabase:", logsUpsertErr);
-          
-          const { data: dbLogs } = await supabaseClient.from('logs').select('id');
-          if (dbLogs) {
-            const dbIds = dbLogs.map(r => Number(r.id));
-            const localIds = logs.map(l => Number(l.id));
-            const toDelete = dbIds.filter(id => !localIds.includes(id));
-            if (toDelete.length > 0) {
-              await supabaseClient.from('logs').delete().in('id', toDelete);
-            }
-          }
-        }
-
-        // 6. Sync settings
-        const settingsPayload = [
-          { key: 'prices', value: prices },
-          { key: 'admin_password', value: localStorage.getItem('aura_admin_password') || 'admin' },
-          { key: 'worker_password', value: localStorage.getItem('aura_worker_password') || '1111' },
-          { key: 'receipt_counter', value: receiptCounter }
-        ];
-        const { error: settingsErr } = await supabaseClient.from('settings').upsert(settingsPayload);
-        if (settingsErr) console.error("Error upserting settings to Supabase:", settingsErr);
-
-      } catch (err) {
-        console.error("Failed to sync to Supabase:", err);
-      }
+        })
+        .subscribe();
     }
 
     async function loadFromSupabase() {
       if (!supabaseClient) return;
       try {
-        console.log("Supabase: Fetching data...");
+        console.log("Supabase: Fetching initial data...");
         // 1. Fetch settings
         const { data: settingsData } = await supabaseClient.from('settings').select('*');
         if (settingsData && settingsData.length > 0) {
           const pricesSetting = settingsData.find(s => s.key === 'prices');
           if (pricesSetting) {
             prices = pricesSetting.value;
-            localStorage.setItem('aura_prices_data', JSON.stringify(prices));
           }
           const adminPwSetting = settingsData.find(s => s.key === 'admin_password');
           if (adminPwSetting) {
-            localStorage.setItem('aura_admin_password', adminPwSetting.value);
+            adminPassword = adminPwSetting.value;
           }
           const workerPwSetting = settingsData.find(s => s.key === 'worker_password');
           if (workerPwSetting) {
-            localStorage.setItem('aura_worker_password', workerPwSetting.value);
+            workerPassword = workerPwSetting.value;
           }
           const counterSetting = settingsData.find(s => s.key === 'receipt_counter');
           if (counterSetting) {
             receiptCounter = Number(counterSetting.value);
-            localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
           }
+          const activeShiftSetting = settingsData.find(s => s.key === 'active_shift');
+          activeShift = activeShiftSetting ? activeShiftSetting.value : null;
+        } else {
+          // If settings table is empty, initialize defaults in Supabase
+          console.log("Supabase: Initializing default settings...");
+          const defaultSettings = [
+            { key: 'prices', value: prices },
+            { key: 'admin_password', value: 'admin' },
+            { key: 'worker_password', value: '1111' },
+            { key: 'receipt_counter', value: 1 }
+          ];
+          await supabaseClient.from('settings').upsert(defaultSettings);
         }
 
         // 2. Fetch cabins
         const { data: cabinsData } = await supabaseClient.from('cabins').select('*');
         if (cabinsData && cabinsData.length > 0) {
           cabins = cabinsData;
-          localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
+        } else {
+          // If empty, initialize default cabins in Supabase
+          console.log("Supabase: Initializing default cabins...");
+          const initialCabins = CABINS_INITIAL.map(c => ({
+            id: c.id,
+            name: c.name,
+            type: c.type,
+            subtitle: c.subtitle || (c.id === 'VIP' ? 'VIP' : 'Standart'),
+            pricePerHour: c.pricePerHour,
+            status: "Bo'sh",
+            session: null,
+            img: c.img
+          }));
+          await supabaseClient.from('cabins').insert(initialCabins);
+          cabins = initialCabins;
         }
 
         // 3. Fetch products
@@ -5331,27 +5321,46 @@
         if (prodsData && prodsData.length > 0) {
           PRODUCTS_LIST.length = 0;
           prodsData.forEach(p => PRODUCTS_LIST.push(p));
-          localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+        } else {
+          // If empty, initialize default products in Supabase
+          console.log("Supabase: Initializing default products...");
+          const defaultProductsList = [
+            { id: 'fanta05', name: 'Fanta 0.5L', price: 8000, adminProfit: 3000, category: 'Ichimliklar', img: 'rasmlar/fanta.png', stock: 20 },
+            { id: 'coca05', name: 'Coca-Cola 0.5L', price: 8000, adminProfit: 3000, category: 'Ichimliklar', img: 'rasmlar/cola.png', stock: 20 },
+            { id: 'pepsi05', name: 'Pepsi 0.5L', price: 8000, adminProfit: 3000, category: 'Ichimliklar', img: 'rasmlar/pepsi.png', stock: 20 },
+            { id: 'pepsi10', name: 'Pepsi 1L', price: 12000, adminProfit: 4000, category: 'Ichimliklar', img: 'rasmlar/pepsi.png', stock: 20 },
+            { id: 'coca10', name: 'Coca-Cola 1L', price: 12000, adminProfit: 4000, category: 'Ichimliklar', img: 'rasmlar/cola.png', stock: 20 },
+            { id: 'nestle05', name: 'Nestle suv 0.5L', price: 3000, adminProfit: 1500, category: 'Ichimliklar', img: 'rasmlar/water.png', stock: 20 },
+            { id: 'nestle15', name: 'Nestle suv 1.5L', price: 5000, adminProfit: 2000, category: 'Ichimliklar', img: 'rasmlar/water.png', stock: 20 },
+            { id: 'snickers', name: 'Snickers', price: 9000, adminProfit: 3000, category: 'Shirinliklar', img: 'rasmlar/snickers.png', stock: 20 },
+            { id: 'twix', name: 'Twix', price: 9000, adminProfit: 3000, category: 'Shirinliklar', img: 'rasmlar/twix.png', stock: 20 },
+            { id: 'lays_big', name: 'Lays Katta', price: 18000, adminProfit: 6000, category: 'Yeguliklar', img: 'rasmlar/lays.png', stock: 20 },
+            { id: 'lays_small', name: 'Lays Kichik', price: 10000, adminProfit: 3500, category: 'Yeguliklar', img: 'rasmlar/lays.png', stock: 20 },
+            { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+            { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+            { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
+          ];
+          await supabaseClient.from('products').insert(defaultProductsList);
+          PRODUCTS_LIST.length = 0;
+          defaultProductsList.forEach(p => PRODUCTS_LIST.push(p));
         }
 
         // 4. Fetch orders
         const { data: ordersData } = await supabaseClient.from('orders').select('*');
         if (ordersData) {
           orders = ordersData;
-          localStorage.setItem('aura_orders_data', JSON.stringify(orders));
         }
 
         // 5. Fetch shifts history
         const { data: shiftsData } = await supabaseClient.from('shifts_history').select('*');
         if (shiftsData) {
-          localStorage.setItem('aura_shifts_history', JSON.stringify(shiftsData));
+          shiftsHistory = shiftsData;
         }
 
         // 6. Fetch logs
         const { data: logsData } = await supabaseClient.from('logs').select('*');
         if (logsData) {
           logs = logsData;
-          localStorage.setItem('aura_logs_data', JSON.stringify(logs));
         }
 
         // Sync and re-render
@@ -5363,6 +5372,7 @@
         if (typeof renderDashboard === 'function') renderDashboard();
         if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
         if (typeof renderLogsList === 'function') renderLogsList();
+        if (typeof renderShiftToggle === 'function') renderShiftToggle();
         
         console.log("Supabase: Synchronization completed successfully.");
       } catch (err) {
@@ -5753,12 +5763,20 @@
         products: []
       };
 
-      saveDB();
       renderCabinsGrid();
       closeAllModals();
 
       // Open the details view immediately for that cabin
       openCabinDetails(activeCabinId);
+
+      if (supabaseClient) {
+        supabaseClient.from('cabins').update({
+          status: cabin.status,
+          session: cabin.session
+        }).eq('id', cabin.id).then(({ error }) => {
+          if (error) console.error("Error starting session in Supabase:", error);
+        });
+      }
     });
 
 
@@ -5975,10 +5993,17 @@
         cabin.session.elapsedSeconds = 0;
       }
       
-      saveDB();
       updateTimers();
       closeAllModals();
       addLog(`${cabin.name} ga ${formatMoney(amount)} so'mlik (${formatDuration(extraMins)}) vaqt qo'shildi`);
+
+      if (supabaseClient) {
+        supabaseClient.from('cabins').update({
+          session: cabin.session
+        }).eq('id', cabin.id).then(({ error }) => {
+          if (error) console.error("Error updating cabin session (add time) in Supabase:", error);
+        });
+      }
     });
 
     document.querySelectorAll('.add-time-preset').forEach(btn => {
@@ -5997,10 +6022,17 @@
       cabin.session.endTime = null;
       cabin.session.durationMinutes = null;
       
-      saveDB();
       updateTimers();
       closeAllModals();
       addLog(`${cabin.name} sessiyasi Cheksiz rejimga o'tkazildi`);
+
+      if (supabaseClient) {
+        supabaseClient.from('cabins').update({
+          session: cabin.session
+        }).eq('id', cabin.id).then(({ error }) => {
+          if (error) console.error("Error setting unlimited mode in Supabase:", error);
+        });
+      }
     });
 
     // TAHRIRLASH (EDIT SESSION) MODAL EVENTS
@@ -6059,9 +6091,16 @@
         cabin.session.endTime = new Date(start.getTime() + newTotalMins * 60 * 1000).toISOString();
       }
 
-      saveDB();
       updateTimers();
       closeAllModals();
+
+      if (supabaseClient) {
+        supabaseClient.from('cabins').update({
+          session: cabin.session
+        }).eq('id', cabin.id).then(({ error }) => {
+          if (error) console.error("Error saving edited session in Supabase:", error);
+        });
+      }
     });
 
 
@@ -6260,14 +6299,22 @@
             id: prod.id,
             name: prod.name,
             price: prod.price,
+            category: prod.category,
             quantity: selectedProductsCart[id]
           });
         }
       }
 
-      saveDB();
       updateActiveCabinDetailsView();
       showView('view-details');
+
+      if (supabaseClient) {
+        supabaseClient.from('cabins').update({
+          session: cabin.session
+        }).eq('id', cabin.id).then(({ error }) => {
+          if (error) console.error("Error updating cart in Supabase:", error);
+        });
+      }
     });
 
     document.getElementById('btn-back-to-details').addEventListener('click', () => {
@@ -6464,17 +6511,15 @@
     document.getElementById('btn-receipt-yakunlash').addEventListener('click', () => {
       if (!pendingOrderRecord || !pendingCabinId) return;
 
-      // Save order to history
+      // Optimistic Updates
       orders.push(pendingOrderRecord);
 
-      // Reset cabin
       const cabin = cabins.find(c => c.id === pendingCabinId);
       if (cabin) {
         cabin.status = "Bo'sh";
         cabin.session = null;
       }
 
-      // Deduct product stock from inventory
       if (pendingOrderRecord.products && pendingOrderRecord.products.length > 0) {
         pendingOrderRecord.products.forEach(p => {
           const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
@@ -6487,15 +6532,43 @@
         });
       }
 
-      pendingOrderRecord = null;
-      pendingCabinId = null;
-
-      saveDB();
       renderCabinsGrid();
-
-      // Close receipt modal and go back to cabins
       document.getElementById('modal-receipt-screen').classList.remove('active');
       showView('view-kabinalar');
+
+      // Targeted Supabase Writes
+      if (supabaseClient) {
+        // 1. Save order to history
+        supabaseClient.from('orders').insert(pendingOrderRecord).then(({ error }) => {
+          if (error) console.error("Error saving order to Supabase:", error);
+        });
+
+        // 2. Reset cabin in Supabase
+        supabaseClient.from('cabins').update({
+          status: "Bo'sh",
+          session: null
+        }).eq('id', pendingCabinId).then(({ error }) => {
+          if (error) console.error("Error resetting cabin in Supabase:", error);
+        });
+
+        // 3. Deduct product stock in Supabase
+        if (pendingOrderRecord.products && pendingOrderRecord.products.length > 0) {
+          pendingOrderRecord.products.forEach(p => {
+            const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
+            if (originalProd && originalProd.category !== 'Kalyanlar') {
+              const newStock = Math.max(0, (originalProd.stock || 20) - p.quantity);
+              supabaseClient.from('products').update({
+                stock: newStock
+              }).eq('id', p.id).then(({ error }) => {
+                if (error) console.error("Error updating product stock in Supabase:", error);
+              });
+            }
+          });
+        }
+      }
+
+      pendingOrderRecord = null;
+      pendingCabinId = null;
     });
 
     // View order history logic next
@@ -6975,24 +7048,7 @@
 
     // Helper to sync admin additions/changes of cabins, prices and products
     function syncCabinsAndPricesWithAdmin() {
-      // Initialize default passwords if not set
-      if (!localStorage.getItem('aura_admin_password')) {
-        localStorage.setItem('aura_admin_password', 'admin');
-      }
-      if (!localStorage.getItem('aura_worker_password')) {
-        localStorage.setItem('aura_worker_password', '1111');
-      }
-
-      // Sync prices from localStorage
-      const storedPrices = localStorage.getItem('aura_prices_data');
-      let prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
-      if (storedPrices) {
-        prices = JSON.parse(storedPrices);
-      } else {
-        localStorage.setItem('aura_prices_data', JSON.stringify(prices));
-      }
-
-      // Sync CABINS_INITIAL pricePerHour based on type/id
+      // 1. Sync CABINS_INITIAL pricePerHour based on global prices
       CABINS_INITIAL.forEach(c => {
         if (c.id === 'VIP') {
           c.pricePerHour = prices.VIP;
@@ -7001,13 +7057,10 @@
         }
       });
 
-      // Handle custom added/modified cabins list
-      const storedCabins = localStorage.getItem('aura_cabins_data');
-      if (storedCabins) {
-        const loadedCabins = JSON.parse(storedCabins);
-        // Rebuild CABINS_INITIAL to match all stored cabins and apply correct synced prices
+      // 2. Rebuild CABINS_INITIAL to match all stored cabins in cabins global variable
+      if (cabins && cabins.length > 0) {
         CABINS_INITIAL.length = 0;
-        loadedCabins.forEach(lc => {
+        cabins.forEach(lc => {
           let price = lc.pricePerHour;
           if (lc.id === 'VIP') {
             price = prices.VIP;
@@ -7025,34 +7078,22 @@
         });
       }
 
-      // Sync products list from localStorage
-      const storedProducts = localStorage.getItem('aura_products_data');
-      if (storedProducts) {
-        const loadedProducts = JSON.parse(storedProducts);
-        
-        const defaultProds = [
-          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
-        ];
-        defaultProds.forEach(dp => {
-          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
-        });
+      // 3. Ensure defaults in PRODUCTS_LIST
+      const defaultProds = [
+        { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+        { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+        { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
+      ];
+      defaultProds.forEach(dp => {
+        if (!PRODUCTS_LIST.find(lp => lp.id === dp.id)) PRODUCTS_LIST.push(dp);
+      });
 
-        PRODUCTS_LIST.length = 0;
-        loadedProducts.forEach(p => {
-          if (p.stock === undefined) p.stock = 20;
-          PRODUCTS_LIST.push(p);
-        });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      } else {
-        PRODUCTS_LIST.forEach(p => {
-          if (p.stock === undefined) {
-            p.stock = 20;
-          }
-        });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      }
+      // Ensure all products have default stock if undefined
+      PRODUCTS_LIST.forEach(p => {
+        if (p.stock === undefined) {
+          p.stock = 20;
+        }
+      });
     }
 
     // Role selection and password validation variables
@@ -7126,7 +7167,7 @@
       }
 
       if (loginSelectedRole === 'worker') {
-        const correctWorkerPw = localStorage.getItem('aura_worker_password') || '1111';
+        const correctWorkerPw = workerPassword || '1111';
         if (password === correctWorkerPw) {
           addLog('Ishchi', 'Tizimga kirdi');
           sessionStorage.setItem('aura_logged_role', 'worker');
@@ -7146,7 +7187,7 @@
           loginErrorMessage.innerText = "Noto'g'ri parol!";
         }
       } else if (loginSelectedRole === 'admin') {
-        const correctAdminPw = localStorage.getItem('aura_admin_password') || 'admin';
+        const correctAdminPw = adminPassword || 'admin';
         if (password === correctAdminPw) {
           addLog('Admin', 'Tizimga kirdi');
           sessionStorage.setItem('aura_logged_role', 'admin');
@@ -7182,17 +7223,21 @@
         finalAction = user;
       }
 
-      const storedLogs = localStorage.getItem('aura_logs_data');
-      const logsList = storedLogs ? JSON.parse(storedLogs) : [];
-      logsList.push({
+      const logRecord = {
         id: Date.now(),
         timestamp: new Date().toISOString(),
         user: finalUser,
         action: finalAction
-      });
-      localStorage.setItem('aura_logs_data', JSON.stringify(logsList));
-      if (typeof logs !== 'undefined') {
-        logs = logsList;
+      };
+
+      // Optimistic update
+      logs.push(logRecord);
+      if (typeof renderLogsList === 'function') renderLogsList();
+
+      if (supabaseClient) {
+        supabaseClient.from('logs').insert(logRecord).then(({ error }) => {
+          if (error) console.error("Error inserting log to Supabase:", error);
+        });
       }
     }
 
@@ -7202,6 +7247,9 @@
       loadDB();
       lucide.createIcons();
       startTimerLoop();
+      if (typeof initSupabaseRealtime === 'function') {
+        initSupabaseRealtime();
+      }
       if (typeof loadFromSupabase === 'function') {
         loadFromSupabase();
       }
@@ -8624,7 +8672,7 @@
           const nextIdVal = cabins.filter(c => c.id !== 'VIP').reduce((max, c) => Math.max(max, parseInt(c.id, 10) || 0), 0) + 1;
           const finalIdStr = formatTimeComponent(nextIdVal);
           
-          cabins.push({
+          const newCabin = {
             id: finalIdStr,
             name: name,
             type: type,
@@ -8633,9 +8681,16 @@
             img: img,
             status: "Bo'sh",
             session: null
-          });
+          };
 
+          cabins.push(newCabin);
           addLog(`Yangi kabina qo'shildi: ${name} (${type})`);
+
+          if (supabaseClient) {
+            supabaseClient.from('cabins').insert(newCabin).then(({ error }) => {
+              if (error) console.error("Error inserting cabin in Supabase:", error);
+            });
+          }
         } else {
           // Edit cabin
           const cabin = cabins.find(c => c.id === id);
@@ -8650,10 +8705,21 @@
             cabin.img = img;
 
             addLog(`Kabina tahrirlandi: ${oldName} -> ${name} (${type})`);
+
+            if (supabaseClient) {
+              supabaseClient.from('cabins').update({
+                name: cabin.name,
+                type: cabin.type,
+                subtitle: cabin.subtitle,
+                pricePerHour: cabin.pricePerHour,
+                img: cabin.img
+              }).eq('id', cabin.id).then(({ error }) => {
+                if (error) console.error("Error updating cabin in Supabase:", error);
+              });
+            }
           }
         }
 
-        saveDB();
         closeAllModals();
         renderCabinsList();
       });
@@ -8674,8 +8740,13 @@
           cabins.splice(idx, 1);
         }
         addLog(`Kabina o'chirildi: ${cabin.name}`);
-        saveDB();
         renderCabinsList();
+
+        if (supabaseClient) {
+          supabaseClient.from('cabins').delete().eq('id', cabinId).then(({ error }) => {
+            if (error) console.error("Error deleting cabin from Supabase:", error);
+          });
+        }
       }
     }
 
@@ -8831,7 +8902,7 @@
 
         if (mode === 'add') {
           const finalIdStr = 'prod_' + Date.now();
-          products.push({
+          const newProduct = {
             id: finalIdStr,
             name: name,
             price: price,
@@ -8839,9 +8910,16 @@
             stock: stock,
             category: category,
             img: img
-          });
-
+          };
+          
+          products.push(newProduct);
           addLog(`Yangi mahsulot qo'shildi: ${name} (${formatMoney(price)})`);
+
+          if (supabaseClient) {
+            supabaseClient.from('products').insert(newProduct).then(({ error }) => {
+              if (error) console.error("Error inserting product in Supabase:", error);
+            });
+          }
         } else {
           const p = products.find(prod => prod.id === id);
           if (p) {
@@ -8853,10 +8931,22 @@
             p.img = img;
 
             addLog(`Mahsulot tahrirlandi: ${name}`);
+
+            if (supabaseClient) {
+              supabaseClient.from('products').update({
+                name: p.name,
+                price: p.price,
+                adminProfit: p.adminProfit,
+                stock: p.stock,
+                category: p.category,
+                img: p.img
+              }).eq('id', p.id).then(({ error }) => {
+                if (error) console.error("Error updating product in Supabase:", error);
+              });
+            }
           }
         }
 
-        saveDB();
         closeAllModals();
         renderAdminProductsList();
       });
@@ -8872,8 +8962,13 @@
           PRODUCTS_LIST.splice(idx, 1);
         }
         addLog(`Mahsulot o'chirildi: ${p.name}`);
-        saveDB();
         renderAdminProductsList();
+
+        if (supabaseClient) {
+          supabaseClient.from('products').delete().eq('id', productId).then(({ error }) => {
+            if (error) console.error("Error deleting product from Supabase:", error);
+          });
+        }
       }
     }
 
@@ -8918,7 +9013,22 @@
 
         addLog(`Soatlik standart narxlar o'zgartirildi: PS4 (${formatMoney(oldPS4)} -> ${formatMoney(newPS4)}), PS5 (${formatMoney(oldPS5)} -> ${formatMoney(newPS5)}), VIP (${formatMoney(oldVIP)} -> ${formatMoney(newVIP)})`);
 
-        saveDB();
+        if (supabaseClient) {
+          // 1. Update prices key in settings table
+          supabaseClient.from('settings').upsert({ key: 'prices', value: prices }).then(({ error }) => {
+            if (error) console.error("Error saving prices to settings table in Supabase:", error);
+          });
+
+          // 2. Batch update pricePerHour column for each cabin in cabins table
+          cabins.forEach(c => {
+            supabaseClient.from('cabins').update({
+              pricePerHour: c.pricePerHour
+            }).eq('id', c.id).then(({ error }) => {
+              if (error) console.error(`Error updating pricePerHour for cabin ${c.id} in Supabase:`, error);
+            });
+          });
+        }
+
         alert("Soatlik narxlar muvaffaqiyatli saqlandi va barcha kabinalarga tatbiq etildi.");
       });
     }
@@ -9650,8 +9760,15 @@
           return;
         }
 
-        localStorage.setItem('aura_admin_password', newPw);
+        adminPassword = newPw;
         addLog("Admin paroli o'zgartirildi");
+
+        if (supabaseClient) {
+          supabaseClient.from('settings').upsert({ key: 'admin_password', value: newPw }).then(({ error }) => {
+            if (error) console.error("Error updating admin password in settings in Supabase:", error);
+          });
+        }
+
         alert("Admin paroli muvaffaqiyatli o'zgartirildi.");
         formChangeAdminPw.reset();
       });
@@ -9668,8 +9785,15 @@
           return;
         }
 
-        localStorage.setItem('aura_worker_password', newPw);
+        workerPassword = newPw;
         addLog("Ishchi (Operator) paroli o'zgartirildi");
+
+        if (supabaseClient) {
+          supabaseClient.from('settings').upsert({ key: 'worker_password', value: newPw }).then(({ error }) => {
+            if (error) console.error("Error updating worker password in settings in Supabase:", error);
+          });
+        }
+
         alert("Ishchi paroli muvaffaqiyatli o'zgartirildi.");
         formChangeWorkerPw.reset();
       });
@@ -9711,9 +9835,14 @@
       btnLogsClear.addEventListener('click', () => {
         if (confirm("Diqqat! Barcha tizim loglari o'chib ketadi. Davom ettirilsinmi?")) {
           logs = [];
-          addLog("Barcha tizim loglari tozalandi");
-          saveDB();
           renderLogsList();
+          addLog("Barcha tizim loglari tozalandi");
+
+          if (supabaseClient) {
+            supabaseClient.from('logs').delete().gt('id', 0).then(({ error }) => {
+              if (error) console.error("Error clearing logs in Supabase:", error);
+            });
+          }
         }
       });
     }
@@ -9727,22 +9856,15 @@
     var btnSaveShift = document.getElementById('btn-save-shift');
 
     function getActiveShift() {
-      const s = localStorage.getItem('aura_active_shift');
-      if (!s) return null;
-      try {
-        return JSON.parse(s);
-      } catch (e) {
-        console.error("Corrupted active shift data in localStorage. Clearing it.", e);
-        localStorage.removeItem('aura_active_shift');
-        return null;
-      }
+      return activeShift;
     }
 
     function setActiveShift(shiftObj) {
-      if (shiftObj) {
-        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
-      } else {
-        localStorage.removeItem('aura_active_shift');
+      activeShift = shiftObj;
+      if (supabaseClient) {
+        supabaseClient.from('settings').upsert({ key: 'active_shift', value: shiftObj }).then(({ error }) => {
+          if (error) console.error("Error setting active shift in Supabase:", error);
+        });
       }
     }
 
@@ -9891,17 +10013,16 @@
       if (!container) return;
       container.innerHTML = '';
 
-      const storedShifts = localStorage.getItem('aura_shifts_history');
-      const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
+      const shifts = [...shiftsHistory];
 
-      if (shiftsHistory.length === 0) {
+      if (shifts.length === 0) {
         container.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #9ca3af;">Hozircha smena hisobotlari yo`q.</td></tr>';
         return;
       }
 
-      shiftsHistory.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+      shifts.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
-      shiftsHistory.forEach(s => {
+      shifts.forEach(s => {
         const startDt = new Date(s.startTime);
         const endDt = new Date(s.endTime);
         const dateStr = startDt.toLocaleDateString('uz-UZ');
@@ -9990,6 +10111,10 @@
         document.getElementById('admin-app').style.display = 'none';
       }
       
+      if (typeof initSupabaseRealtime === 'function') {
+        initSupabaseRealtime();
+      }
+      
       if (typeof loadFromSupabase === 'function') {
         loadFromSupabase();
       }
@@ -10009,15 +10134,15 @@
     var btnSaveShift = document.getElementById('btn-save-shift');
 
     function getActiveShift() {
-      const s = localStorage.getItem('aura_active_shift');
-      return s ? JSON.parse(s) : null;
+      return activeShift;
     }
 
     function setActiveShift(shiftObj) {
-      if (shiftObj) {
-        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
-      } else {
-        localStorage.removeItem('aura_active_shift');
+      activeShift = shiftObj;
+      if (supabaseClient) {
+        supabaseClient.from('settings').upsert({ key: 'active_shift', value: shiftObj }).then(({ error }) => {
+          if (error) console.error("Error setting active shift in Supabase:", error);
+        });
       }
     }
 
@@ -10313,28 +10438,29 @@
         const previousText = btnSaveShift.innerHTML;
         btnSaveShift.innerHTML = 'Saqlanmoqda...';
 
-        // Save to shifts history
-        const storedShifts = localStorage.getItem('aura_shifts_history');
-        const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
-        shiftsHistory.push(currentCalculatedShift);
-        localStorage.setItem('aura_shifts_history', JSON.stringify(shiftsHistory));
-        
-        // Clear active shift and calculated data to prevent resubmission
-        setActiveShift(null);
-        currentCalculatedShift = null;
-        
-        renderShiftToggle();
-        modalShiftReport.classList.remove('active');
-        addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi');
-        
-        // Refresh admin side if needed
-        if (typeof renderAdminShifts === 'function') renderAdminShifts();
-
-        // Restore button state
-        setTimeout(() => {
-          btnSaveShift.disabled = false;
-          btnSaveShift.innerHTML = previousText;
-        }, 1000);
+        // Save shift report directly to Supabase shifts_history table
+        supabaseClient.from('shifts_history').insert(currentCalculatedShift).then(({ error }) => {
+          if (error) {
+            console.error("Error saving shift to Supabase:", error);
+            alert("Smenani saqlashda xatolik yuz berdi: " + error.message);
+            btnSaveShift.disabled = false;
+            btnSaveShift.innerHTML = previousText;
+          } else {
+            // Clear active shift locally and in Supabase settings
+            setActiveShift(null);
+            currentCalculatedShift = null;
+            
+            renderShiftToggle();
+            modalShiftReport.classList.remove('active');
+            addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi');
+            
+            // Restore button state
+            setTimeout(() => {
+              btnSaveShift.disabled = false;
+              btnSaveShift.innerHTML = previousText;
+            }, 1000);
+          }
+        });
       });
     }
     
