@@ -5042,25 +5042,9 @@
     const supabaseClient = (typeof supabase !== 'undefined') ? supabase.createClient(supabaseUrl, supabaseKey) : null;
 
     // Initial Constants
-    const CABINS_INITIAL = [
-      { id: '01', name: 'Kabina 01', type: 'PS4', subtitle: 'Standart', pricePerHour: 20000, img: 'rasmlar/ps4.png' },
-      { id: '02', name: 'Kabina 02', type: 'PS4', subtitle: 'Standart', pricePerHour: 20000, img: 'rasmlar/ps4.png' },
-      { id: '03', name: 'Kabina 03', type: 'PS4', subtitle: 'Standart', pricePerHour: 20000, img: 'rasmlar/ps4.png' },
-      { id: '04', name: 'Kabina 04', type: 'PS4', subtitle: 'Standart', pricePerHour: 20000, img: 'rasmlar/ps4.png' },
-      { id: '05', name: 'Kabina 05', type: 'PS5', subtitle: 'Standart', pricePerHour: 25000, img: 'rasmlar/ps5.png' },
-      { id: '06', name: 'Kabina 06', type: 'PS4', subtitle: 'Standart', pricePerHour: 20000, img: 'rasmlar/ps4.png' },
-      { id: '07', name: 'Kabina 07', type: 'PS4', subtitle: 'Standart', pricePerHour: 20000, img: 'rasmlar/ps4.png' },
-      { id: 'VIP', name: 'VIP Kabina', type: 'PS5', subtitle: 'VIP', pricePerHour: 30000, img: 'rasmlar/ps5.png' }
-    ];
+    const CABINS_INITIAL = [];
 
-    const PRODUCTS_LIST = [
-      { id: 'cola033', name: 'Coca-Cola Classic 0.33L', price: 5000, category: 'Ichimliklar', img: 'rasmlar/cola33.png' },
-      { id: 'cola1', name: 'Coca-Cola 1L', price: 15000, category: 'Ichimliklar', img: 'rasmlar/cola1.png' },
-      { id: 'cola15', name: 'Coca-Cola 1.5L', price: 18000, category: 'Ichimliklar', img: 'rasmlar/cola15.png' },
-      { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-      { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-      { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
-    ];
+    const PRODUCTS_LIST = [];
 
     // Uzbek calendar labels
     const UZ_MONTHS = [
@@ -5189,9 +5173,9 @@
         })
         .subscribe();
 
-      // 4. Shifts History Realtime
-      supabaseClient.channel('public:shifts_history')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts_history' }, payload => {
+      // 4. Shifts History Realtime (Renamed to shift_reports)
+      supabaseClient.channel('public:shift_reports')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_reports' }, payload => {
           console.log("Realtime Shift update:", payload);
           if (payload.eventType === 'INSERT') {
             if (!shiftsHistory.find(s => s.id === payload.new.id)) {
@@ -5283,66 +5267,23 @@
           }
           const activeShiftSetting = settingsData.find(s => s.key === 'active_shift');
           activeShift = activeShiftSetting ? activeShiftSetting.value : null;
-        } else {
-          // If settings table is empty, initialize defaults in Supabase
-          console.log("Supabase: Initializing default settings...");
-          const defaultSettings = [
-            { key: 'prices', value: prices },
-            { key: 'admin_password', value: 'admin' },
-            { key: 'worker_password', value: '1111' },
-            { key: 'receipt_counter', value: 1 }
-          ];
-          await supabaseClient.from('settings').upsert(defaultSettings);
         }
 
         // 2. Fetch cabins
         const { data: cabinsData } = await supabaseClient.from('cabins').select('*');
-        if (cabinsData && cabinsData.length > 0) {
-          cabins = cabinsData;
-        } else {
-          // If empty, initialize default cabins in Supabase
-          console.log("Supabase: Initializing default cabins...");
-          const initialCabins = CABINS_INITIAL.map(c => ({
-            id: c.id,
-            name: c.name,
-            type: c.type,
-            subtitle: c.subtitle || (c.id === 'VIP' ? 'VIP' : 'Standart'),
-            pricePerHour: c.pricePerHour,
-            status: "Bo'sh",
-            session: null,
-            img: c.img
-          }));
-          await supabaseClient.from('cabins').insert(initialCabins);
-          cabins = initialCabins;
+        if (cabinsData) {
+          cabins = cabinsData.sort((a, b) => {
+            if (a.id === 'VIP') return 1;
+            if (b.id === 'VIP') return -1;
+            return a.id.localeCompare(b.id);
+          });
         }
 
         // 3. Fetch products
         const { data: prodsData } = await supabaseClient.from('products').select('*');
-        if (prodsData && prodsData.length > 0) {
+        if (prodsData) {
           PRODUCTS_LIST.length = 0;
           prodsData.forEach(p => PRODUCTS_LIST.push(p));
-        } else {
-          // If empty, initialize default products in Supabase
-          console.log("Supabase: Initializing default products...");
-          const defaultProductsList = [
-            { id: 'fanta05', name: 'Fanta 0.5L', price: 8000, adminProfit: 3000, category: 'Ichimliklar', img: 'rasmlar/fanta.png', stock: 20 },
-            { id: 'coca05', name: 'Coca-Cola 0.5L', price: 8000, adminProfit: 3000, category: 'Ichimliklar', img: 'rasmlar/cola.png', stock: 20 },
-            { id: 'pepsi05', name: 'Pepsi 0.5L', price: 8000, adminProfit: 3000, category: 'Ichimliklar', img: 'rasmlar/pepsi.png', stock: 20 },
-            { id: 'pepsi10', name: 'Pepsi 1L', price: 12000, adminProfit: 4000, category: 'Ichimliklar', img: 'rasmlar/pepsi.png', stock: 20 },
-            { id: 'coca10', name: 'Coca-Cola 1L', price: 12000, adminProfit: 4000, category: 'Ichimliklar', img: 'rasmlar/cola.png', stock: 20 },
-            { id: 'nestle05', name: 'Nestle suv 0.5L', price: 3000, adminProfit: 1500, category: 'Ichimliklar', img: 'rasmlar/water.png', stock: 20 },
-            { id: 'nestle15', name: 'Nestle suv 1.5L', price: 5000, adminProfit: 2000, category: 'Ichimliklar', img: 'rasmlar/water.png', stock: 20 },
-            { id: 'snickers', name: 'Snickers', price: 9000, adminProfit: 3000, category: 'Shirinliklar', img: 'rasmlar/snickers.png', stock: 20 },
-            { id: 'twix', name: 'Twix', price: 9000, adminProfit: 3000, category: 'Shirinliklar', img: 'rasmlar/twix.png', stock: 20 },
-            { id: 'lays_big', name: 'Lays Katta', price: 18000, adminProfit: 6000, category: 'Yeguliklar', img: 'rasmlar/lays.png', stock: 20 },
-            { id: 'lays_small', name: 'Lays Kichik', price: 10000, adminProfit: 3500, category: 'Yeguliklar', img: 'rasmlar/lays.png', stock: 20 },
-            { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-            { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-            { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
-          ];
-          await supabaseClient.from('products').insert(defaultProductsList);
-          PRODUCTS_LIST.length = 0;
-          defaultProductsList.forEach(p => PRODUCTS_LIST.push(p));
         }
 
         // 4. Fetch orders
@@ -5351,8 +5292,8 @@
           orders = ordersData;
         }
 
-        // 5. Fetch shifts history
-        const { data: shiftsData } = await supabaseClient.from('shifts_history').select('*');
+        // 5. Fetch shift reports (renamed from shifts_history)
+        const { data: shiftsData } = await supabaseClient.from('shift_reports').select('*');
         if (shiftsData) {
           shiftsHistory = shiftsData;
         }
@@ -6565,6 +6506,11 @@
             }
           });
         }
+
+        // 4. Update receipt counter in settings in Supabase
+        supabaseClient.from('settings').upsert({ key: 'receipt_counter', value: receiptCounter }).then(({ error }) => {
+          if (error) console.error("Error updating receipt counter in Supabase settings:", error);
+        });
       }
 
       pendingOrderRecord = null;
@@ -10438,8 +10384,8 @@
         const previousText = btnSaveShift.innerHTML;
         btnSaveShift.innerHTML = 'Saqlanmoqda...';
 
-        // Save shift report directly to Supabase shifts_history table
-        supabaseClient.from('shifts_history').insert(currentCalculatedShift).then(({ error }) => {
+        // Save shift report directly to Supabase shift_reports table
+        supabaseClient.from('shift_reports').insert(currentCalculatedShift).then(({ error }) => {
           if (error) {
             console.error("Error saving shift to Supabase:", error);
             alert("Smenani saqlashda xatolik yuz berdi: " + error.message);
