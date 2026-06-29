@@ -12,6 +12,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Chart.js for premium graphics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Admin stylesheet inline -->
   <style id="admin-styles">
     /* ── Admin Panel Base & Styling (Apple Minimalistic Style) ── */
@@ -5034,6 +5036,10 @@
 
   <!-- JavaScript logic -->
   <script>
+    // Supabase Integration
+    const supabaseUrl = 'https://lbtpieexdaxgbrnriyli.supabase.co';
+    const supabaseKey = 'sb_publishable_ddOnodW60U2ddOA3BSUFMw_cBJzJiVp';
+    const supabaseClient = (typeof supabase !== 'undefined') ? supabase.createClient(supabaseUrl, supabaseKey) : null;
 
     // Initial Constants
     const CABINS_INITIAL = [
@@ -5195,13 +5201,173 @@
       }
     }
 
-    function saveDB() {
+     function saveDB() {
       localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
       localStorage.setItem('aura_orders_data', JSON.stringify(orders));
       localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
       localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
       localStorage.setItem('aura_prices_data', JSON.stringify(prices));
       localStorage.setItem('aura_logs_data', JSON.stringify(logs));
+      
+      saveToSupabase();
+    }
+
+    async function saveToSupabase() {
+      if (!supabaseClient) return;
+      try {
+        // 1. Sync cabins (upsert + delete missing)
+        if (cabins && cabins.length > 0) {
+          const { error: cabinUpsertErr } = await supabaseClient.from('cabins').upsert(cabins);
+          if (cabinUpsertErr) console.error("Error upserting cabins to Supabase:", cabinUpsertErr);
+          
+          const { data: dbCabins } = await supabaseClient.from('cabins').select('id');
+          if (dbCabins) {
+            const dbIds = dbCabins.map(r => r.id);
+            const localIds = cabins.map(c => c.id);
+            const toDelete = dbIds.filter(id => !localIds.includes(id));
+            if (toDelete.length > 0) {
+              await supabaseClient.from('cabins').delete().in('id', toDelete);
+            }
+          }
+        }
+
+        // 2. Sync products (upsert + delete missing)
+        if (PRODUCTS_LIST && PRODUCTS_LIST.length > 0) {
+          const { error: prodUpsertErr } = await supabaseClient.from('products').upsert(PRODUCTS_LIST);
+          if (prodUpsertErr) console.error("Error upserting products to Supabase:", prodUpsertErr);
+          
+          const { data: dbProds } = await supabaseClient.from('products').select('id');
+          if (dbProds) {
+            const dbIds = dbProds.map(r => r.id);
+            const localIds = PRODUCTS_LIST.map(p => p.id);
+            const toDelete = dbIds.filter(id => !localIds.includes(id));
+            if (toDelete.length > 0) {
+              await supabaseClient.from('products').delete().in('id', toDelete);
+            }
+          }
+        }
+
+        // 3. Sync orders (upsert)
+        if (orders && orders.length > 0) {
+          const { error: orderUpsertErr } = await supabaseClient.from('orders').upsert(orders);
+          if (orderUpsertErr) console.error("Error upserting orders to Supabase:", orderUpsertErr);
+        }
+
+        // 4. Sync shifts_history (upsert)
+        const storedShifts = localStorage.getItem('aura_shifts_history');
+        const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
+        if (shiftsHistory && shiftsHistory.length > 0) {
+          const { error: shiftUpsertErr } = await supabaseClient.from('shifts_history').upsert(shiftsHistory);
+          if (shiftUpsertErr) console.error("Error upserting shifts to Supabase:", shiftUpsertErr);
+        }
+
+        // 5. Sync logs (upsert + delete missing)
+        if (logs) {
+          const { error: logsUpsertErr } = await supabaseClient.from('logs').upsert(logs);
+          if (logsUpsertErr) console.error("Error upserting logs to Supabase:", logsUpsertErr);
+          
+          const { data: dbLogs } = await supabaseClient.from('logs').select('id');
+          if (dbLogs) {
+            const dbIds = dbLogs.map(r => Number(r.id));
+            const localIds = logs.map(l => Number(l.id));
+            const toDelete = dbIds.filter(id => !localIds.includes(id));
+            if (toDelete.length > 0) {
+              await supabaseClient.from('logs').delete().in('id', toDelete);
+            }
+          }
+        }
+
+        // 6. Sync settings
+        const settingsPayload = [
+          { key: 'prices', value: prices },
+          { key: 'admin_password', value: localStorage.getItem('aura_admin_password') || 'admin' },
+          { key: 'worker_password', value: localStorage.getItem('aura_worker_password') || '1111' },
+          { key: 'receipt_counter', value: receiptCounter }
+        ];
+        const { error: settingsErr } = await supabaseClient.from('settings').upsert(settingsPayload);
+        if (settingsErr) console.error("Error upserting settings to Supabase:", settingsErr);
+
+      } catch (err) {
+        console.error("Failed to sync to Supabase:", err);
+      }
+    }
+
+    async function loadFromSupabase() {
+      if (!supabaseClient) return;
+      try {
+        console.log("Supabase: Fetching data...");
+        // 1. Fetch settings
+        const { data: settingsData } = await supabaseClient.from('settings').select('*');
+        if (settingsData && settingsData.length > 0) {
+          const pricesSetting = settingsData.find(s => s.key === 'prices');
+          if (pricesSetting) {
+            prices = pricesSetting.value;
+            localStorage.setItem('aura_prices_data', JSON.stringify(prices));
+          }
+          const adminPwSetting = settingsData.find(s => s.key === 'admin_password');
+          if (adminPwSetting) {
+            localStorage.setItem('aura_admin_password', adminPwSetting.value);
+          }
+          const workerPwSetting = settingsData.find(s => s.key === 'worker_password');
+          if (workerPwSetting) {
+            localStorage.setItem('aura_worker_password', workerPwSetting.value);
+          }
+          const counterSetting = settingsData.find(s => s.key === 'receipt_counter');
+          if (counterSetting) {
+            receiptCounter = Number(counterSetting.value);
+            localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
+          }
+        }
+
+        // 2. Fetch cabins
+        const { data: cabinsData } = await supabaseClient.from('cabins').select('*');
+        if (cabinsData && cabinsData.length > 0) {
+          cabins = cabinsData;
+          localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
+        }
+
+        // 3. Fetch products
+        const { data: prodsData } = await supabaseClient.from('products').select('*');
+        if (prodsData && prodsData.length > 0) {
+          PRODUCTS_LIST.length = 0;
+          prodsData.forEach(p => PRODUCTS_LIST.push(p));
+          localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+        }
+
+        // 4. Fetch orders
+        const { data: ordersData } = await supabaseClient.from('orders').select('*');
+        if (ordersData) {
+          orders = ordersData;
+          localStorage.setItem('aura_orders_data', JSON.stringify(orders));
+        }
+
+        // 5. Fetch shifts history
+        const { data: shiftsData } = await supabaseClient.from('shifts_history').select('*');
+        if (shiftsData) {
+          localStorage.setItem('aura_shifts_history', JSON.stringify(shiftsData));
+        }
+
+        // 6. Fetch logs
+        const { data: logsData } = await supabaseClient.from('logs').select('*');
+        if (logsData) {
+          logs = logsData;
+          localStorage.setItem('aura_logs_data', JSON.stringify(logs));
+        }
+
+        // Sync and re-render
+        syncCabinsAndPricesWithAdmin();
+        
+        if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
+        if (typeof renderAdminShifts === 'function') renderAdminShifts();
+        if (typeof renderHistoryOrders === 'function') renderHistoryOrders();
+        if (typeof renderDashboard === 'function') renderDashboard();
+        if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
+        if (typeof renderLogsList === 'function') renderLogsList();
+        
+        console.log("Supabase: Synchronization completed successfully.");
+      } catch (err) {
+        console.error("Supabase load failed:", err);
+      }
     }
 
     // UTILITIES
@@ -7036,6 +7202,9 @@
       loadDB();
       lucide.createIcons();
       startTimerLoop();
+      if (typeof loadFromSupabase === 'function') {
+        loadFromSupabase();
+      }
 
       // Bind return button click event
       const returnBtn = document.getElementById('btn-back-to-admin');
@@ -9820,6 +9989,10 @@
         document.getElementById('app').style.display = 'block';
         document.getElementById('admin-app').style.display = 'none';
       }
+      
+      if (typeof loadFromSupabase === 'function') {
+        loadFromSupabase();
+      }
     }
 
     if (document.readyState === 'loading') {
@@ -10017,8 +10190,12 @@
       if (!activeShift) return;
       const endTime = new Date().toISOString();
       const startDt = new Date(activeShift.startTime);
+      const endDt = new Date(endTime);
       
-      const shiftOrders = orders.filter(o => new Date(o.timestamp) >= startDt);
+      const shiftOrders = orders.filter(o => {
+        const orderTime = new Date(o.endTime);
+        return orderTime >= startDt && orderTime <= endDt;
+      });
       
       let ps4Amount = 0, ps4Hours = 0, ps4Count = 0;
       let ps5Amount = 0, ps5Hours = 0, ps5Count = 0;
@@ -10027,6 +10204,7 @@
       const drinksMap = {};
       const kalyanMap = {};
       let totalDrinksAmount = 0;
+      let totalDrinksProfit = 0;
       let totalKalyanAmount = 0;
       let totalKalyanProfit = 0;
 
@@ -10035,7 +10213,7 @@
           const cabin = cabins.find(c => c.id === o.cabinId);
           let cType = cabin ? cabin.type : 'PS4';
           let isVip = cabin && cabin.id === 'VIP';
-          const durationH = o.durationMins ? (o.durationMins / 60) : 0;
+          const durationH = o.playedDurationMinutes ? (o.playedDurationMinutes / 60) : 0;
           
           if (isVip) {
             vipAmount += o.playAmount; vipHours += durationH; vipCount++;
@@ -10049,9 +10227,10 @@
         if (o.products && o.products.length > 0) {
           o.products.forEach(p => {
             const prodSum = p.price * p.quantity;
+            const prodObj = PRODUCTS_LIST.find(pl => pl.id === p.id);
+            const pProfit = (prodObj && prodObj.adminProfit !== undefined && prodObj.adminProfit !== null && prodObj.adminProfit !== "") ? (Number(prodObj.adminProfit) * p.quantity) : prodSum;
+            
             if (p.category === 'Kalyanlar') {
-              const prodObj = PRODUCTS_LIST.find(pl => pl.id === p.id);
-              const pProfit = prodObj ? (prodObj.adminProfit * p.quantity) : prodSum;
               totalKalyanAmount += prodSum;
               totalKalyanProfit += pProfit;
               if (!kalyanMap[p.id]) kalyanMap[p.id] = { name: p.name, qty: 0, total: 0, profit: 0 };
@@ -10060,6 +10239,7 @@
               kalyanMap[p.id].profit += pProfit;
             } else {
               totalDrinksAmount += prodSum;
+              totalDrinksProfit += pProfit;
               if (!drinksMap[p.id]) drinksMap[p.id] = { name: p.name, qty: 0, total: 0 };
               drinksMap[p.id].qty += p.quantity;
               drinksMap[p.id].total += prodSum;
@@ -10070,7 +10250,7 @@
 
       const totalPlayAmount = ps4Amount + ps5Amount + vipAmount;
       const totalSales = totalPlayAmount + totalDrinksAmount + totalKalyanAmount;
-      const totalProfit = totalPlayAmount + totalDrinksAmount + totalKalyanProfit;
+      const totalProfit = totalPlayAmount + totalDrinksProfit + totalKalyanProfit;
 
       currentCalculatedShift = {
         id: 'SHIFT-' + Date.now(),
@@ -10090,6 +10270,25 @@
         totalClients: shiftOrders.length,
         totalSessions: ps4Count + ps5Count + vipCount
       };
+
+      // Debug output as requested
+      let hookahCount = 0;
+      Object.values(kalyanMap).forEach(k => {
+        hookahCount += k.qty;
+      });
+
+      console.log("=== SHIFT REPORT DIAGNOSTICS ===");
+      console.log("Shift Start:", activeShift.startTime);
+      console.log("Shift End:", endTime);
+      console.log("PlayStation Sessions Count:", ps4Count + ps5Count + vipCount);
+      console.log("Orders Count:", shiftOrders.length);
+      console.log("Hookah Count:", hookahCount);
+      console.log("PlayStation Revenue:", totalPlayAmount);
+      console.log("Products Revenue:", totalDrinksAmount);
+      console.log("Hookah Revenue:", totalKalyanAmount);
+      console.log("Total Revenue:", totalSales);
+      console.log("Profit:", totalProfit);
+      console.log("================================");
 
       shiftReportBody.innerHTML = generateShiftReportHTML(currentCalculatedShift);
       modalShiftReport.classList.add('active');
