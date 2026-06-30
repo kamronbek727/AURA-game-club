@@ -2000,6 +2000,7 @@
       justify-content: center;
       align-items: center;
       min-height: 100vh;
+      min-height: 100dvh;
       overflow: hidden;
     }
 
@@ -2008,6 +2009,7 @@
       width: 100%;
       max-width: 100%;
       height: 100vh;
+      height: 100dvh;
       background: #ffffff;
       display: flex;
       flex-direction: column;
@@ -2123,7 +2125,8 @@
       overflow-y: auto;
       background: #f8fafc;
       padding: 20px;
-      padding-bottom: calc(70px + env(safe-area-inset-bottom, 0));
+      padding-bottom: calc(90px + env(safe-area-inset-bottom, 0)); /* Space for bottom nav & floating elements */
+      min-height: 0;
     }
 
     /* Kabinalar Section Title & Filter Dropdown */
@@ -2576,11 +2579,9 @@
       padding: 16px 20px calc(16px + var(--safe-bottom)) 20px;
       background: #ffffff;
       border-top: 1px solid #f1f5f9;
-      position: absolute;
-      bottom: 0;
-      left: 0;
       width: 100%;
       z-index: 40;
+      flex-shrink: 0;
     }
 
     .btn-finish-session {
@@ -5126,24 +5127,30 @@
     // Server vaqtini olish va offset hisoblash
     async function syncServerTime() {
       try {
+        // Vercel / GitHub Pages serveridan aniq vaqtni olish
         const localBefore = Date.now();
-        const { data, error } = await supabaseClient
-          .from('aura_state')
-          .select('updated_at')
-          .eq('id', 'global')
-          .maybeSingle();
+        const res = await fetch(window.location.href, { method: 'HEAD', cache: 'no-store' });
         const localAfter = Date.now();
-        if (!error && data && data.updated_at) {
-          const serverTime = new Date(data.updated_at).getTime();
+        
+        const dateHeader = res.headers.get('date');
+        if (dateHeader) {
+          const serverTime = new Date(dateHeader).getTime();
           const localMid = Math.round((localBefore + localAfter) / 2);
-          // Only use offset if we recently updated (within last 30s)
-          if (localAfter - serverTime < 30000) {
-            serverTimeOffset = serverTime - localMid;
-            console.log('Server time offset calculated:', serverTimeOffset, 'ms');
+          serverTimeOffset = serverTime - localMid;
+          console.log('Haqiqiy server vaqti bilan moslashtirildi. Offset:', serverTimeOffset, 'ms');
+        } else {
+          // Fallback to WorldTimeAPI
+          const resApi = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC');
+          const dataApi = await resApi.json();
+          if (dataApi && dataApi.utc_datetime) {
+            const apiTime = new Date(dataApi.utc_datetime).getTime();
+            const localMid = Math.round((localBefore + Date.now()) / 2);
+            serverTimeOffset = apiTime - localMid;
+            console.log('WorldTimeAPI orqali vaqt moslashtirildi. Offset:', serverTimeOffset, 'ms');
           }
         }
       } catch(e) {
-        // ignore
+        console.warn("Vaqt sinxronizatsiyasi muvaffaqiyatsiz bo'ldi, lokal vaqt ishlatilmoqda:", e);
       }
     }
 
