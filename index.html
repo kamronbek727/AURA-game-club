@@ -5430,17 +5430,20 @@
       }
     }
 
+    let currentRealtimeChannel = null;
     function setupSupabaseRealtime() {
       if (!supabaseClient) return;
 
-      // Realtime kanali orqali har qanday jadvaldagi o'zgarish eshitiladi
-      // Oddiylik va xavfsizlik uchun, biron jadval o'zgarganda to'liq qayta yuklanadi (Sync Down)
-      // Bu bizni "race condition" dan saqlaydi va hamma data aktual bo'ladi
-      supabaseClient
+      // Agar oldin kanal yaratilgan bo'lsa uni o'chiramiz
+      if (currentRealtimeChannel) {
+        supabaseClient.removeChannel(currentRealtimeChannel);
+        currentRealtimeChannel = null;
+      }
+
+      currentRealtimeChannel = supabaseClient
         .channel('public_db_changes')
         .on('postgres_changes', { event: '*', schema: 'public' }, payload => {
           console.log('Supabase Realtime Triggered on table:', payload.table);
-          // O'zgarish o'zimiznikidan (lokaldan) emasligini qisman tasdiqlash uchun (throttle)
           if (!window._syncTimeout) {
             window._syncTimeout = setTimeout(() => {
                supabaseSyncDown();
@@ -5722,7 +5725,7 @@
             </div>
           </div>
           <div class="cabin-img-container">
-            <img src="${c.img}" alt="${c.name}" class="cabin-img">
+            <img src="${cImg}" alt="${c.name}" class="cabin-img" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
           </div>
           <div class="cabin-console-name">${c.type}</div>
           <div class="cabin-console-type">${c.subtitle}</div>
@@ -5966,11 +5969,11 @@
           row.className = 'order-item-row';
 
           const prodInfo = PRODUCTS_LIST.find(pr => pr.id === p.id);
-          const imgSrc = prodInfo ? prodInfo.img : 'rasmlar/coca_cola.png';
+          const imgSrc = prodInfo ? (prodInfo.img || (p.category === 'kalyan' || p.type === 'Kalyanlar' ? 'rasmlar/kalyan.png' : 'rasmlar/logo.png')) : 'rasmlar/logo.png';
 
           row.innerHTML = `
             <div class="order-item-left">
-              <img src="${imgSrc}" alt="${p.name}" class="order-item-img">
+              <img src="${imgSrc}" alt="${p.name}" class="order-item-img" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
               <div>
                 <div class="order-item-name">${p.name}</div>
                 <div class="order-item-qty">${p.quantity} ta</div>
@@ -6259,9 +6262,11 @@
           `;
         }
 
+        const pImg = p.img || (p.category === 'kalyan' || p.type === 'Kalyanlar' ? 'rasmlar/kalyan.png' : 'rasmlar/logo.png');
+
         card.innerHTML = `
           <div class="product-info-left">
-            <img src="${p.img}" alt="${p.name}" class="product-thumbnail">
+            <img src="${pImg}" alt="${p.name}" class="product-thumbnail" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
             <div class="product-details">
               <span class="product-title">${p.name}</span>
               <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 1px;">
@@ -8252,7 +8257,7 @@
         showView('view-kabinalar');
       }
       if (typeof renderShiftToggle === 'function') renderShiftToggle();
-      if (typeof startTimerLoop === 'function') startTimerLoop();
+      if (typeof startTimerLoop === 'function') renderTimerLoop();
       
       // Close sidebar on mobile if active
       closeSidebar();
@@ -8406,7 +8411,7 @@
                 name: p.name,
                 qty: 0,
                 revenue: 0,
-                img: originalProd ? originalProd.img : 'rasmlar/cola33.png'
+                img: originalProd ? (originalProd.img || 'rasmlar/cola33.png') : 'rasmlar/cola33.png'
               };
             }
             productSalesMap[p.id].qty += p.quantity;
@@ -8556,6 +8561,7 @@
       cabins.forEach(c => {
         const card = document.createElement('div');
         card.className = 'admin-cabin-card';
+        const cImg = c.img || (c.type === 'PS5' ? 'rasmlar/ps5.png' : (c.id === 'VIP' ? 'rasmlar/vip.png' : 'rasmlar/ps4.png'));
 
         let statusHTML = '';
         if (c.status === "O'yinda") {
@@ -8570,7 +8576,7 @@
             ${statusHTML}
           </div>
           <div class="admin-cabin-img-wrap">
-            <img src="${c.img}" alt="${c.name}" class="admin-cabin-img">
+            <img src="${cImg}" alt="${c.name}" class="admin-cabin-img" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
           </div>
           <div class="admin-cabin-type">${c.type}</div>
           <div class="admin-cabin-price">${formatMoney(c.pricePerHour)} / soat</div>
@@ -8709,6 +8715,7 @@
       products.forEach(p => {
         const card = document.createElement('div');
         card.className = 'admin-product-card';
+        const pImg = p.img || (p.category === 'kalyan' || p.type === 'Kalyanlar' ? 'rasmlar/kalyan.png' : 'rasmlar/logo.png');
 
         const stockVal = p.stock !== undefined ? p.stock : 20;
         let badgeHTML = '';
@@ -8724,7 +8731,7 @@
 
         card.innerHTML = `
           <div class="admin-product-img-wrap">
-            <img src="${p.img}" alt="${p.name}" class="admin-product-img">
+            <img src="${pImg}" alt="${p.name}" class="admin-product-img" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
           </div>
           <div class="admin-product-name">${p.name}</div>
           <div class="admin-product-category">${p.category}</div>
