@@ -12,8 +12,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Chart.js for premium graphics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Supabase JS Library for Real-time DB Sync -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase JS Library for Real-time DB Sync (with unpkg fallback) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="this.onerror=null; this.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';"></script>
   <!-- Admin stylesheet inline -->
   <style id="admin-styles">
     /* ── Admin Panel Base & Styling (Apple Minimalistic Style) ── */
@@ -5054,6 +5054,15 @@
         <button type="button" class="btn btn-secondary btn-close-modal">Yopish</button>
       </div>
     </div>
+  </div>
+
+  <!-- Floating Debug Panel for Supabase -->
+  <div id="supabase-debug-panel" style="position: fixed; bottom: 80px; right: 20px; width: 320px; max-height: 250px; background: rgba(0,0,0,0.9); color: #00ff00; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 8px; z-index: 10000; overflow-y: auto; border: 1px solid #333; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+    <div style="font-weight: bold; border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 3px; display: flex; justify-content: space-between; align-items: center; color: #fff;">
+      <span>Supabase Debug Log</span>
+      <button onclick="document.getElementById('supabase-debug-panel').style.display='none'" style="background: none; border: none; color: #ff5555; cursor: pointer; font-weight: bold; font-size: 12px; padding: 0 5px;">[X]</button>
+    </div>
+    <div id="supabase-debug-content"></div>
   </div>
 
   </div> <!-- /app-container -->
