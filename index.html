@@ -9859,20 +9859,22 @@
     }
 
     function renderShiftToggle() {
-      if (!btnShiftToggle) return;
+      const _btn = document.getElementById('btn-shift-toggle');
+      const _timer = document.getElementById('shift-timer-display');
+      if (!_btn) return;
       const activeShift = getActiveShift();
       if (activeShift) {
-        btnShiftToggle.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
-        btnShiftToggle.style.background = '#ef4444';
-        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
-        shiftTimerDisplay.style.display = 'block';
+        _btn.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
+        _btn.style.background = '#ef4444';
+        _btn.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
+        if (_timer) _timer.style.display = 'block';
       } else {
-        btnShiftToggle.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
-        btnShiftToggle.style.background = '#0045d8';
-        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
-        shiftTimerDisplay.style.display = 'none';
+        _btn.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
+        _btn.style.background = '#0045d8';
+        _btn.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
+        if (_timer) _timer.style.display = 'none';
       }
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     function updateShiftTimer() {
@@ -10135,20 +10137,22 @@
     }
 
     function renderShiftToggle() {
-      if (!btnShiftToggle) return;
+      const _btn = document.getElementById('btn-shift-toggle');
+      const _timer = document.getElementById('shift-timer-display');
+      if (!_btn) return;
       const activeShift = getActiveShift();
       if (activeShift) {
-        btnShiftToggle.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
-        btnShiftToggle.style.background = '#ef4444';
-        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
-        shiftTimerDisplay.style.display = 'block';
+        _btn.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
+        _btn.style.background = '#ef4444';
+        _btn.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
+        if (_timer) _timer.style.display = 'block';
       } else {
-        btnShiftToggle.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
-        btnShiftToggle.style.background = '#0045d8';
-        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
-        shiftTimerDisplay.style.display = 'none';
+        _btn.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
+        _btn.style.background = '#0045d8';
+        _btn.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
+        if (_timer) _timer.style.display = 'none';
       }
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     function updateShiftTimer() {
