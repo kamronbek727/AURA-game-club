@@ -12,7 +12,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Chart.js for premium graphics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Supabase JS Client -->
+  <!-- Supabase JS Library for Real-time DB Sync -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Admin stylesheet inline -->
   <style id="admin-styles">
@@ -3892,7 +3892,12 @@
             Ish vaqti: 00:00:00
           </div>
         </div>
-        <div class="header-right"></div>
+        <div class="header-right">
+          <div class="bell-container">
+            <button class="icon-btn"><i data-lucide="bell"></i></button>
+            <span class="notification-badge"></span>
+          </div>
+        </div>
       </div>
 
       <!-- Main Content -->
@@ -4050,9 +4055,15 @@
       <!-- Header -->
       <div class="header">
         <div class="header-left">
+          <button class="icon-btn" id="btn-hamburger-hist"><i data-lucide="menu"></i></button>
           <span class="section-title">Buyurtmalar</span>
         </div>
-        <div class="header-right"></div>
+        <div class="header-right">
+          <div class="bell-container">
+            <button class="icon-btn"><i data-lucide="bell"></i></button>
+            <span class="notification-badge"></span>
+          </div>
+        </div>
       </div>
 
       <!-- Main scrollable filters & results -->
@@ -5093,299 +5104,289 @@
     // Timer Interval Reference
     let globalTimerInterval = null;
 
-    // Supabase Connection Settings
-    const supabaseUrl = 'https://bssrgbzwueduatktbalj.supabase.co';
-    const supabaseKey = 'sb_publishable_nCoFEgeTzr_Sw_8ebRKMmw_ajt4N-xA';
-    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    // ── SUPABASE SYNCHRONIZATION MODULE ──
+    const SUPABASE_URL = 'https://qbxyegberalhadbiknhi.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_ChEM6ocRfWTC6OalK5ecCg_jdpunIfq';
+    let supabaseClient = null;
 
-    let activeShiftState = null;
-    let shiftsHistoryList = [];
-
-    // Async Fetchers from Supabase
-    async function fetchSettingsFromSupabase() {
-      const { data, error } = await supabase.from('settings').select('*');
-      if (error) {
-        console.error("Error fetching settings:", error);
-        return;
-      }
-      data.forEach(s => {
-        if (s.key === 'prices') {
-          prices = s.value;
-        } else if (s.key === 'receipt_counter') {
-          receiptCounter = Number(s.value);
-        }
-      });
+    if (typeof supabase !== 'undefined') {
+      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } else {
+      console.error("Supabase CDN failed to load.");
     }
 
-    async function saveSettingToSupabase(key, value) {
-      const { error } = await supabase
-        .from('settings')
-        .upsert({ key, value, updated_at: new Date().toISOString() });
-      if (error) {
-        console.error(`Error saving setting ${key}:`, error);
-      }
-    }
-
-    async function fetchProductsFromSupabase() {
-      const { data, error } = await supabase.from('products').select('*');
-      if (error) {
-        console.error("Error fetching products:", error);
-        return;
-      }
-      PRODUCTS_LIST.length = 0;
-      data.forEach(p => {
-        PRODUCTS_LIST.push({
-          id: p.id,
-          name: p.name,
-          price: Number(p.price),
-          category: p.is_hookah ? 'Kalyanlar' : p.category,
-          is_hookah: p.is_hookah,
-          manage_stock: p.manage_stock,
-          stock: p.stock,
-          adminProfit: p.admin_profit ? Number(p.admin_profit) : null,
-          img: p.img
-        });
-      });
-    }
-
-    async function fetchCabinsFromSupabase() {
-      const { data: dbCabins, error: errC } = await supabase.from('cabins').select('*');
-      if (errC) {
-        console.error("Error fetching cabins:", errC);
-        return;
-      }
-      
-      const { data: dbSessions, error: errS } = await supabase
-        .from('sessions')
-        .select(`
-          *,
-          session_products (
-            *,
-            products (*)
-          )
-        `)
-        .eq('status', 'active');
-        
-      if (errS) {
-        console.error("Error fetching active sessions:", errS);
-        return;
-      }
-      
-      cabins = dbCabins.map(dbc => {
-        const activeSess = dbSessions.find(s => s.cabin_id === dbc.id);
-        let sessionObj = null;
-        if (activeSess) {
-          sessionObj = {
-            id: activeSess.id,
-            startTime: activeSess.start_time,
-            endTime: activeSess.end_time,
-            durationType: activeSess.session_type,
-            paidAmount: Number(activeSess.paid_amount),
-            remainingSeconds: Number(activeSess.remaining_seconds),
-            products: activeSess.session_products.map(sp => ({
-              id: sp.product_id,
-              name: sp.products ? sp.products.name : 'Unknown Product',
-              price: sp.products ? Number(sp.products.price) : 0,
-              quantity: sp.quantity,
-              category: sp.products ? sp.products.category : 'Ichimliklar'
-            }))
-          };
-        }
-        
-        return {
-          id: dbc.id,
-          name: dbc.name,
-          type: dbc.type,
-          subtitle: dbc.subtitle,
-          pricePerHour: Number(dbc.price_per_hour),
-          img: dbc.type === 'PS5' ? 'rasmlar/ps5.png' : 'rasmlar/ps4.png',
-          status: activeSess ? "O'yinda" : "Bo'sh",
-          session: sessionObj
-        };
-      });
-      
-      const order = ['01', '02', '03', '04', '05', '06', '07', 'VIP'];
-      cabins.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-    }
-
-    async function fetchOrdersFromSupabase() {
-      const { data, error } = await supabase
-        .from('receipts')
-        .select(`
-          *,
-          receipt_items (*)
-        `);
-      if (error) {
-        console.error("Error fetching receipts:", error);
-        return;
-      }
-      orders = data.map(dbr => ({
-        id: dbr.id,
-        cabinId: dbr.cabin_id,
-        cabinName: dbr.cabin_name,
-        startTime: dbr.start_time,
-        endTime: dbr.end_time,
-        playedDurationMinutes: dbr.played_duration_minutes,
-        playAmount: Number(dbr.play_amount),
-        productAmount: Number(dbr.product_amount),
-        kalyanAmount: Number(dbr.kalyan_amount),
-        totalAmount: Number(dbr.total_amount),
-        adminProductAmount: Number(dbr.admin_product_amount),
-        adminTotalAmount: Number(dbr.admin_total_profit),
-        products: dbr.receipt_items.map(ri => ({
-          id: ri.product_id,
-          name: ri.name,
-          price: Number(ri.price),
-          quantity: ri.quantity,
-          category: ri.category
-        })),
-        dateString: dbr.date_string
-      }));
-    }
-
-    async function fetchLogsFromSupabase() {
-      const { data, error } = await supabase
-        .from('system_logs')
-        .select('*')
-        .order('timestamp', { ascending: false })
-        .limit(100);
-      if (error) {
-        console.error("Error fetching logs:", error);
-        return;
-      }
-      logs = data.map(l => ({
-        id: l.id,
-        timestamp: l.timestamp,
-        user: l.role,
-        action: l.action
-      }));
-    }
-
-    async function fetchActiveShiftFromSupabase() {
-      const { data, error } = await supabase.from('active_shift').select('*');
-      if (error) {
-        console.error("Error fetching active shift:", error);
-        return;
-      }
-      if (data && data.length > 0) {
-        activeShiftState = {
-          startTime: data[0].start_time,
-          userId: data[0].user_id
-        };
-      } else {
-        activeShiftState = null;
-      }
-    }
-
-    async function startShiftInSupabase(userId) {
-      const { data, error } = await supabase
-        .from('active_shift')
-        .insert({ user_id: userId, start_time: new Date().toISOString() })
-        .select()
-        .single();
-      if (error) {
-        console.error("Error starting shift:", error);
-      }
-      return data;
-    }
-
-    async function endShiftInSupabase() {
-      const { error } = await supabase
-        .from('active_shift')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      if (error) {
-        console.error("Error ending shift:", error);
-      }
-    }
-
-    async function fetchShiftsHistoryFromSupabase() {
-      const { data, error } = await supabase
-        .from('shift_reports')
-        .select('*')
-        .order('start_time', { ascending: false });
-      if (error) {
-        console.error("Error fetching shift reports:", error);
-        return;
-      }
-      shiftsHistoryList = data.map(s => ({
-        id: s.id,
-        startTime: s.start_time,
-        endTime: s.end_time,
-        ps4Amount: Number(s.ps4_amount),
-        ps4Hours: Number(s.ps4_hours),
-        ps4Count: Number(s.ps4_count),
-        ps5Amount: Number(s.ps5_amount),
-        ps5Hours: Number(s.ps5_hours),
-        ps5Count: Number(s.ps5_count),
-        vipAmount: Number(s.vip_amount),
-        vipHours: Number(s.vip_hours),
-        vipCount: Number(s.vip_count),
-        totalPlayAmount: Number(s.total_play_amount),
-        drinksList: [],
-        totalDrinksAmount: Number(s.total_drinks_amount),
-        kalyanList: [],
-        totalKalyanAmount: Number(s.total_kalyan_amount),
-        totalKalyanProfit: Number(s.total_kalyan_profit),
-        totalSales: Number(s.total_sales),
-        totalProfit: Number(s.total_profit),
-        totalClients: Number(s.total_clients),
-        totalSessions: Number(s.total_sessions)
-      }));
-    }
-
-    async function initSupabaseDB() {
+    async function supabaseSyncUp() {
+      if (!supabaseClient) return;
       try {
-        await fetchSettingsFromSupabase();
-        await fetchProductsFromSupabase();
-        await fetchCabinsFromSupabase();
-        await fetchOrdersFromSupabase();
-        await fetchLogsFromSupabase();
-        await fetchActiveShiftFromSupabase();
-        
-        if (!prices || !prices.PS4) {
-          prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
-          await saveSettingToSupabase('prices', prices);
-        }
-        
-        CABINS_INITIAL.forEach(c => {
-          let price = c.pricePerHour;
-          if (c.id === 'VIP') {
-            price = prices.VIP;
-          } else if (prices[c.type]) {
-            price = prices[c.type];
-          }
-          c.pricePerHour = price;
-        });
-        
-        cabins.forEach(c => {
-          let price = c.pricePerHour;
-          if (c.id === 'VIP') {
-            price = prices.VIP;
-          } else if (prices[c.type]) {
-            price = prices[c.type];
-          }
-          c.pricePerHour = price;
-        });
+        const activeShift = localStorage.getItem('aura_active_shift') ? JSON.parse(localStorage.getItem('aura_active_shift')) : null;
+        const shiftsHistory = localStorage.getItem('aura_shifts_history') ? JSON.parse(localStorage.getItem('aura_shifts_history')) : [];
+        const adminPassword = localStorage.getItem('aura_admin_password') || 'admin';
+        const workerPassword = localStorage.getItem('aura_worker_password') || '1111';
+
+        const { error } = await supabaseClient
+          .from('aura_state')
+          .upsert({
+            id: 'global',
+            cabins: cabins,
+            orders: orders,
+            receipt_counter: receiptCounter,
+            products: PRODUCTS_LIST,
+            prices: prices,
+            logs: logs,
+            active_shift: activeShift,
+            shifts_history: shiftsHistory,
+            admin_password: adminPassword,
+            worker_password: workerPassword,
+            updated_at: new Date().toISOString()
+          });
+        if (error) console.error("Supabase sync up error:", error);
       } catch (err) {
-        console.error("Initialization error:", err);
+        console.error("Supabase sync up exception:", err);
       }
     }
 
-    function getActiveShift() {
-      return activeShiftState;
+    async function supabaseSyncDown() {
+      if (!supabaseClient) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from('aura_state')
+          .select('*')
+          .eq('id', 'global')
+          .maybeSingle();
+
+        if (error) {
+          console.error("Supabase sync down error:", error);
+          return;
+        }
+
+        if (data) {
+          console.log("Supabase State Loaded Successfully.");
+          applyIncomingState(data);
+        } else {
+          console.log("Supabase has no data. Uploading current state as global initial state...");
+          await supabaseSyncUp();
+        }
+      } catch (err) {
+        console.error("Supabase sync down exception:", err);
+      }
     }
 
-    function setActiveShift(shiftObj) {
-      // Stub left for compat
+    function applyIncomingState(state) {
+      if (!state) return;
+
+      // 1. Update in-memory state variables
+      if (state.cabins) cabins = state.cabins;
+      if (state.orders) orders = state.orders;
+      if (state.receipt_counter !== undefined && state.receipt_counter !== null) {
+        receiptCounter = state.receipt_counter;
+      }
+      if (state.prices) prices = state.prices;
+      if (state.logs) logs = state.logs;
+
+      if (state.products) {
+        PRODUCTS_LIST.length = 0;
+        state.products.forEach(p => PRODUCTS_LIST.push(p));
+      }
+      
+      // Keep 'products' variable in sync
+      if (typeof products !== 'undefined') {
+        products = PRODUCTS_LIST;
+      }
+
+      // 2. Sync to localStorage
+      localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
+      localStorage.setItem('aura_orders_data', JSON.stringify(orders));
+      localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
+      localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      localStorage.setItem('aura_prices_data', JSON.stringify(prices));
+      localStorage.setItem('aura_logs_data', JSON.stringify(logs));
+
+      if (state.active_shift !== undefined) {
+        if (state.active_shift) {
+          localStorage.setItem('aura_active_shift', JSON.stringify(state.active_shift));
+        } else {
+          localStorage.removeItem('aura_active_shift');
+        }
+      }
+
+      if (state.shifts_history) {
+        localStorage.setItem('aura_shifts_history', JSON.stringify(state.shifts_history));
+      }
+
+      if (state.admin_password) {
+        localStorage.setItem('aura_admin_password', state.admin_password);
+      }
+      if (state.worker_password) {
+        localStorage.setItem('aura_worker_password', state.worker_password);
+      }
+
+      // 3. Re-render UI views
+      refreshAllUI();
     }
 
+    function refreshAllUI() {
+      try {
+        // Client-side renders
+        if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
+        if (typeof renderShiftToggle === 'function') renderShiftToggle();
+        if (typeof renderHistoryOrders === 'function') renderHistoryOrders();
+        if (typeof renderLogsList === 'function') renderLogsList();
+
+        // Check details view active state
+        const detailsView = document.getElementById('view-details');
+        if (detailsView && detailsView.classList.contains('active') && activeCabinId !== null) {
+          const cabin = cabins.find(c => c.id === activeCabinId);
+          if (!cabin || !cabin.session) {
+            showView('view-kabinalar');
+          } else {
+            if (typeof updateActiveCabinDetailsView === 'function') updateActiveCabinDetailsView();
+          }
+        }
+
+        // Admin-side renders
+        const loggedRole = sessionStorage.getItem('aura_logged_role');
+        if (loggedRole === 'admin') {
+          if (typeof renderDashboard === 'function') renderDashboard();
+          if (typeof renderCabinsList === 'function') renderCabinsList();
+          if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
+          if (typeof renderAdminHistoryOrders === 'function') renderAdminHistoryOrders();
+          if (typeof renderAdminShifts === 'function') renderAdminShifts();
+        }
+      } catch (err) {
+        console.error("UI refresh failed:", err);
+      }
+    }
+
+    function setupSupabaseRealtime() {
+      if (!supabaseClient) return;
+      supabaseClient
+        .channel('public:aura_state')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'aura_state', filter: 'id=eq.global' }, payload => {
+          console.log('Real-time updates received from Supabase:', payload);
+          if (payload.new) {
+            applyIncomingState(payload.new);
+          }
+        })
+        .subscribe((status) => {
+          console.log("Supabase Real-time Subscription Status:", status);
+        });
+    }
+
+    // Database load/save helper
     function loadDB() {
-      // Stub left for compat
+      // Sync prices
+      const storedPrices = localStorage.getItem('aura_prices_data');
+      if (storedPrices) {
+        try {
+          prices = JSON.parse(storedPrices);
+        } catch (e) {
+          console.error("Failed to parse prices data from localStorage:", e);
+          prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
+        }
+      } else {
+        prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
+        localStorage.setItem('aura_prices_data', JSON.stringify(prices));
+      }
+
+      // Rebuild cabins to match all stored cabins and apply correct synced prices
+      const storedCabins = localStorage.getItem('aura_cabins_data');
+      if (storedCabins) {
+        let loadedCabins = JSON.parse(storedCabins);
+        cabins = loadedCabins.map(c => {
+          let price = c.pricePerHour;
+          if (c.id === 'VIP') {
+            price = prices.VIP;
+          } else if (prices[c.type]) {
+            price = prices[c.type];
+          }
+          c.pricePerHour = price;
+          return c;
+        });
+      } else {
+        cabins = CABINS_INITIAL.map(c => {
+          let price = c.pricePerHour;
+          if (c.id === 'VIP') {
+            price = prices.VIP;
+          } else if (prices[c.type]) {
+            price = prices[c.type];
+          }
+          return {
+            ...c,
+            pricePerHour: price,
+            status: "Bo'sh",
+            session: null
+          };
+        });
+        saveDB();
+      }
+
+      const storedOrders = localStorage.getItem('aura_orders_data');
+      if (storedOrders) {
+        orders = JSON.parse(storedOrders);
+      } else {
+        orders = [];
+        saveDB();
+      }
+
+      const storedReceiptCounter = localStorage.getItem('aura_receipt_counter');
+      if (storedReceiptCounter) {
+        receiptCounter = parseInt(storedReceiptCounter, 10);
+      } else {
+        receiptCounter = 1;
+        saveDB();
+      }
+
+      // Sync products list from localStorage
+      const storedProducts = localStorage.getItem('aura_products_data');
+      if (storedProducts) {
+        const loadedProducts = JSON.parse(storedProducts);
+        
+        const defaultProds = [
+          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
+        ];
+        defaultProds.forEach(dp => {
+          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
+        });
+
+        PRODUCTS_LIST.length = 0;
+        loadedProducts.forEach(p => {
+          if (p.stock === undefined) p.stock = 20;
+          PRODUCTS_LIST.push(p);
+        });
+        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      } else {
+        PRODUCTS_LIST.forEach(p => {
+          if (p.stock === undefined) {
+            p.stock = 20;
+          }
+        });
+        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      }
+
+      // Sync logs
+      const storedLogs = localStorage.getItem('aura_logs_data');
+      if (storedLogs) {
+        try {
+          logs = JSON.parse(storedLogs);
+        } catch (e) {
+          console.error("Failed to parse logs data from localStorage:", e);
+          logs = [];
+        }
+      } else {
+        logs = [];
+      }
     }
 
     function saveDB() {
-      // Stub left for compat
+      localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
+      localStorage.setItem('aura_orders_data', JSON.stringify(orders));
+      localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
+      localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      localStorage.setItem('aura_prices_data', JSON.stringify(prices));
+      localStorage.setItem('aura_logs_data', JSON.stringify(logs));
+      supabaseSyncUp();
     }
 
     // UTILITIES
@@ -5741,14 +5742,13 @@
     document.getElementById('btn-mode-unlimited').addEventListener('click', () => setStartSessionMode('unlimited'));
 
     // Submit Start Session
-    document.getElementById('btn-submit-start-session').addEventListener('click', async () => {
+    document.getElementById('btn-submit-start-session').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin) return;
 
       const now = new Date();
       let endTime = null;
       let durationMinutes = null;
-      let paidAmount = 0;
 
       if (startSessionMode === 'limited') {
         const amount = parseFloat(document.getElementById('start-money-amount').value);
@@ -5756,7 +5756,7 @@
           alert("Iltimos, mijoz to'lovini to'g'ri kiriting.");
           return;
         }
-        paidAmount = amount;
+        
         const pricePerHour = cabin.pricePerHour;
         const totalMinutes = (amount / pricePerHour) * 60;
         durationMinutes = totalMinutes; // Keep precision in state
@@ -5764,29 +5764,16 @@
         endTime = new Date(now.getTime() + totalMinutes * 60 * 1000).toISOString();
       }
 
-      const { data: newSession, error: errS } = await supabase
-        .from('sessions')
-        .insert({
-          cabin_id: cabin.id,
-          status: 'active',
-          session_type: startSessionMode,
-          start_time: now.toISOString(),
-          end_time: endTime,
-          calculated_duration: 0,
-          remaining_seconds: durationMinutes ? Math.floor(durationMinutes * 60) : 0,
-          paid_amount: paidAmount,
-          total_price: paidAmount
-        })
-        .select()
-        .single();
+      cabin.status = "O'yinda";
+      cabin.session = {
+        startTime: now.toISOString(),
+        endTime: endTime,
+        durationMinutes: durationMinutes,
+        products: []
+      };
 
-      if (errS) {
-        console.error("Error creating session in Supabase:", errS);
-        alert("Sessiyani boshlashda xatolik yuz berdi!");
-        return;
-      }
-
-      await fetchCabinsFromSupabase();
+      saveDB();
+      renderCabinsGrid();
       closeAllModals();
 
       // Open the details view immediately for that cabin
@@ -5980,7 +5967,7 @@
         calcEl.innerText = `${formatTimeComponent(h)}:${formatTimeComponent(m)}:${formatTimeComponent(s)}`;
     });
 
-    document.getElementById('btn-submit-add-time').addEventListener('click', async () => {
+    document.getElementById('btn-submit-add-time').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
@@ -5992,43 +5979,25 @@
       
       const pricePerHour = cabin.pricePerHour;
       const extraMins = (amount / pricePerHour) * 60;
-      const extraSecs = Math.floor(extraMins * 60);
-
-      let newEndTime = null;
-      let newPaidAmount = cabin.session.paidAmount + amount;
 
       if (cabin.session.endTime) {
         // Limited session: extend end time
         const currentEnd = new Date(cabin.session.endTime);
-        newEndTime = new Date(currentEnd.getTime() + extraMins * 60 * 1000).toISOString();
+        cabin.session.endTime = new Date(currentEnd.getTime() + extraMins * 60 * 1000).toISOString();
+        cabin.session.durationMinutes = (cabin.session.durationMinutes || 0) + extraMins;
       } else {
         // Unlimited session: converting to limited
         const now = new Date();
-        newEndTime = new Date(now.getTime() + extraMins * 60 * 1000).toISOString();
+        cabin.session.endTime = new Date(now.getTime() + extraMins * 60 * 1000).toISOString();
+        cabin.session.durationMinutes = extraMins;
+        // reset elapsed seconds
+        cabin.session.elapsedSeconds = 0;
       }
-
-      const { error: errU } = await supabase
-        .from('sessions')
-        .update({
-          end_time: newEndTime,
-          session_type: 'limited',
-          paid_amount: newPaidAmount,
-          remaining_seconds: cabin.session.endTime ? (cabin.session.remainingSeconds + extraSecs) : extraSecs,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', cabin.session.id);
-
-      if (errU) {
-        console.error("Error adding time in Supabase:", errU);
-        alert("Vaqt qo'shishda xatolik yuz berdi!");
-        return;
-      }
-
-      await fetchCabinsFromSupabase();
       
+      saveDB();
       updateTimers();
       closeAllModals();
-      await addLog(`${cabin.name} ga ${formatMoney(amount)} so'mlik (${formatDuration(extraMins)}) vaqt qo'shildi`);
+      addLog(`${cabin.name} ga ${formatMoney(amount)} so'mlik (${formatDuration(extraMins)}) vaqt qo'shildi`);
     });
 
     document.querySelectorAll('.add-time-preset').forEach(btn => {
@@ -6040,31 +6009,17 @@
       });
     });
 
-    document.getElementById('btn-submit-unlimited-mode').addEventListener('click', async () => {
+    document.getElementById('btn-submit-unlimited-mode').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
       
-      const { error: errU } = await supabase
-        .from('sessions')
-        .update({
-          end_time: null,
-          session_type: 'unlimited',
-          remaining_seconds: 0,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', cabin.session.id);
-
-      if (errU) {
-        console.error("Error setting unlimited mode in Supabase:", errU);
-        alert("Cheksiz rejimga o'tkazishda xatolik yuz berdi!");
-        return;
-      }
-
-      await fetchCabinsFromSupabase();
+      cabin.session.endTime = null;
+      cabin.session.durationMinutes = null;
       
+      saveDB();
       updateTimers();
       closeAllModals();
-      await addLog(`${cabin.name} sessiyasi Cheksiz rejimga o'tkazildi`);
+      addLog(`${cabin.name} sessiyasi Cheksiz rejimga o'tkazildi`);
     });
 
     // TAHRIRLASH (EDIT SESSION) MODAL EVENTS
@@ -6104,14 +6059,13 @@
     document.getElementById('btn-edit-mode-limited').addEventListener('click', () => setEditSessionMode('limited'));
     document.getElementById('btn-edit-mode-unlimited').addEventListener('click', () => setEditSessionMode('unlimited'));
 
-    document.getElementById('btn-submit-edit-session').addEventListener('click', async () => {
+    document.getElementById('btn-submit-edit-session').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
-      let newEndTime = null;
-
       if (editSessionMode === 'unlimited') {
-        newEndTime = null;
+        cabin.session.endTime = null;
+        cabin.session.durationMinutes = null;
       } else {
         const newTotalMins = parseInt(document.getElementById('edit-total-minutes').value, 10);
         if (isNaN(newTotalMins) || newTotalMins <= 0) {
@@ -6120,26 +6074,11 @@
         }
 
         const start = new Date(cabin.session.startTime);
-        newEndTime = new Date(start.getTime() + newTotalMins * 60 * 1000).toISOString();
+        cabin.session.durationMinutes = newTotalMins;
+        cabin.session.endTime = new Date(start.getTime() + newTotalMins * 60 * 1000).toISOString();
       }
 
-      const { error: errU } = await supabase
-        .from('sessions')
-        .update({
-          end_time: newEndTime,
-          session_type: editSessionMode,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', cabin.session.id);
-
-      if (errU) {
-        console.error("Error editing session in Supabase:", errU);
-        alert("Sessiyani tahrirlashda xatolik yuz berdi!");
-        return;
-      }
-
-      await fetchCabinsFromSupabase();
-      
+      saveDB();
       updateTimers();
       closeAllModals();
     });
@@ -6327,48 +6266,26 @@
     }
 
     // Save/Confirm Cart
-    document.getElementById('btn-products-confirm').addEventListener('click', async () => {
+    document.getElementById('btn-products-confirm').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
-      // Delete existing products for this session in Supabase
-      const { error: errD } = await supabase
-        .from('session_products')
-        .delete()
-        .eq('session_id', cabin.session.id);
-
-      if (errD) {
-        console.error("Error deleting old session products in Supabase:", errD);
-        alert("Mahsulotlarni yangilashda xatolik yuz berdi!");
-        return;
-      }
-
-      // Build insertion array
-      const insertRows = [];
+      // Sync selectedProductsCart back to cabin session
+      cabin.session.products = [];
       for (const id in selectedProductsCart) {
-        insertRows.push({
-          session_id: cabin.session.id,
-          product_id: id,
-          quantity: selectedProductsCart[id]
-        });
-      }
-
-      // Insert new products in Supabase
-      if (insertRows.length > 0) {
-        const { error: errI } = await supabase
-          .from('session_products')
-          .insert(insertRows);
-
-        if (errI) {
-          console.error("Error inserting session products in Supabase:", errI);
-          alert("Mahsulotlarni qo'shishda xatolik yuz berdi!");
-          return;
+        const prod = PRODUCTS_LIST.find(p => p.id === id);
+        if (prod) {
+          cabin.session.products.push({
+            id: prod.id,
+            name: prod.name,
+            price: prod.price,
+            quantity: selectedProductsCart[id],
+            category: prod.category
+          });
         }
       }
 
-      // Re-fetch cabins from Supabase to sync local state
-      await fetchCabinsFromSupabase();
-      
+      saveDB();
       updateActiveCabinDetailsView();
       showView('view-details');
     });
@@ -6564,139 +6481,36 @@
     });
 
     // YAKUNLASH — Finalize session, save order, reset cabin
-    document.getElementById('btn-receipt-yakunlash').addEventListener('click', async () => {
+    document.getElementById('btn-receipt-yakunlash').addEventListener('click', () => {
       if (!pendingOrderRecord || !pendingCabinId) return;
 
+      // Save order to history
+      orders.push(pendingOrderRecord);
+
+      // Reset cabin
       const cabin = cabins.find(c => c.id === pendingCabinId);
-      if (!cabin || !cabin.session) return;
+      if (cabin) {
+        cabin.status = "Bo'sh";
+        cabin.session = null;
+      }
 
-      const activeSessionId = cabin.session.id;
-
-      // Split products into ordinary products and Kalyanlar
-      let totalDrinksAmount = 0;
-      let totalKalyanAmount = 0;
-      let totalKalyanProfit = 0;
-      let adminDrinksProfit = 0;
-
-      const receiptItemsRows = [];
-
-      pendingOrderRecord.products.forEach(p => {
-        const prodSum = p.price * p.quantity;
-        const originalProd = PRODUCTS_LIST.find(pl => pl.id === p.id);
-        const category = originalProd ? originalProd.category : (p.category || 'Ichimliklar');
-        const isHookah = category === 'Kalyanlar' || category === 'hookah';
-
-        if (isHookah) {
-          let pProfit = 0;
-          if (p.price === 80000) {
-            pProfit = 25000 * p.quantity;
-          } else if (p.price === 95000) {
-            pProfit = 40000 * p.quantity;
-          } else if (p.price === 110000) {
-            pProfit = 45000 * p.quantity;
-          } else {
-            pProfit = originalProd && originalProd.adminProfit !== undefined ? (Number(originalProd.adminProfit) * p.quantity) : (p.price * 0.45 * p.quantity);
+      // Deduct product stock from inventory
+      if (pendingOrderRecord.products && pendingOrderRecord.products.length > 0) {
+        pendingOrderRecord.products.forEach(p => {
+          const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
+          if (originalProd && originalProd.category !== 'Kalyanlar') {
+            if (originalProd.stock === undefined) {
+              originalProd.stock = 20;
+            }
+            originalProd.stock = Math.max(0, originalProd.stock - p.quantity);
           }
-          totalKalyanAmount += prodSum;
-          totalKalyanProfit += pProfit;
-        } else {
-          totalDrinksAmount += prodSum;
-          adminDrinksProfit += prodSum; // drinks are 100% profit
-        }
-
-        receiptItemsRows.push({
-          receipt_id: pendingOrderRecord.id,
-          product_id: p.id,
-          name: p.name,
-          price: p.price,
-          quantity: p.quantity,
-          category: category,
-          is_hookah: isHookah
         });
-      });
-
-      const adminTotalProfit = pendingOrderRecord.playAmount + adminDrinksProfit + totalKalyanProfit;
-
-      // 1. Insert receipt record
-      const { error: errRec } = await supabase
-        .from('receipts')
-        .insert({
-          id: pendingOrderRecord.id,
-          session_id: activeSessionId,
-          cabin_id: pendingOrderRecord.cabinId,
-          cabin_name: pendingOrderRecord.cabinName,
-          start_time: pendingOrderRecord.startTime,
-          end_time: pendingOrderRecord.endTime,
-          played_duration_minutes: pendingOrderRecord.playedDurationMinutes,
-          play_amount: pendingOrderRecord.playAmount,
-          product_amount: totalDrinksAmount,
-          kalyan_amount: totalKalyanAmount,
-          total_amount: pendingOrderRecord.totalAmount,
-          admin_product_amount: adminDrinksProfit,
-          admin_kalyan_profit: totalKalyanProfit,
-          admin_total_profit: adminTotalProfit,
-          date_string: pendingOrderRecord.dateString
-        });
-
-      if (errRec) {
-        console.error("Error creating receipt in Supabase:", errRec);
-        alert("Chekni saqlashda xatolik yuz berdi!");
-        return;
       }
-
-      // 2. Insert receipt items
-      if (receiptItemsRows.length > 0) {
-        const { error: errItems } = await supabase
-          .from('receipt_items')
-          .insert(receiptItemsRows);
-        if (errItems) {
-          console.error("Error creating receipt items in Supabase:", errItems);
-        }
-      }
-
-      // 3. Update session status to completed
-      const { error: errSess } = await supabase
-        .from('sessions')
-        .update({
-          status: 'completed',
-          calculated_duration: pendingOrderRecord.playedDurationMinutes,
-          paid_amount: pendingOrderRecord.playAmount,
-          total_price: pendingOrderRecord.totalAmount,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', activeSessionId);
-      if (errSess) {
-        console.error("Error updating session status in Supabase:", errSess);
-      }
-
-      // 4. Deduct product stock
-      for (const p of pendingOrderRecord.products) {
-        const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
-        const category = originalProd ? originalProd.category : (p.category || 'Ichimliklar');
-        if (category !== 'Kalyanlar' && category !== 'hookah') {
-          const currentStock = originalProd && originalProd.stock !== undefined ? originalProd.stock : 20;
-          const newStock = Math.max(0, currentStock - p.quantity);
-          
-          const { error: errStock } = await supabase
-            .from('products')
-            .update({ stock: newStock })
-            .eq('id', p.id);
-          if (errStock) {
-            console.error(`Error updating stock for product ${p.id}:`, errStock);
-          }
-        }
-      }
-
-      // 5. Update settings counter
-      await saveSettingToSupabase('receipt_counter', receiptCounter);
-
-      await fetchCabinsFromSupabase();
-      await fetchOrdersFromSupabase();
-      await fetchProductsFromSupabase();
 
       pendingOrderRecord = null;
       pendingCabinId = null;
 
+      saveDB();
       renderCabinsGrid();
 
       // Close receipt modal and go back to cabins
@@ -7324,34 +7138,17 @@
       loginStepRole.classList.add('active');
     });
 
-    async function submitLogin() {
+    function submitLogin() {
       const password = loginPasswordInput.value;
       if (!password) {
         loginErrorMessage.innerText = "Parolni kiriting!";
         return;
       }
 
-      const roleName = loginSelectedRole === 'admin' ? 'admin' : 'operator';
-
-      // Query user from Supabase
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('role', roleName)
-        .eq('password', password)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Login verification error:", error);
-        loginErrorMessage.innerText = "Aloqa xatosi!";
-        return;
-      }
-
-      if (userData) {
-        sessionStorage.setItem('aura_logged_user_id', userData.id);
-
-        if (loginSelectedRole === 'worker') {
-          await addLog('Ishchi', 'Tizimga kirdi');
+      if (loginSelectedRole === 'worker') {
+        const correctWorkerPw = localStorage.getItem('aura_worker_password') || '1111';
+        if (password === correctWorkerPw) {
+          addLog('Ishchi', 'Tizimga kirdi');
           sessionStorage.setItem('aura_logged_role', 'worker');
           const returnBar = document.getElementById('admin-return-bar');
           if (returnBar) returnBar.style.display = 'none';
@@ -7361,19 +7158,17 @@
           document.getElementById('app').style.display = 'block';
           document.getElementById('admin-app').style.display = 'none';
           
-          // Re-fetch all data on login
-          await fetchCabinsFromSupabase();
-          await fetchProductsFromSupabase();
-          await fetchOrdersFromSupabase();
-          await fetchLogsFromSupabase();
-          await fetchActiveShiftFromSupabase();
-          
           renderCabinsGrid();
           showView('view-kabinalar');
           if (typeof renderShiftToggle === 'function') renderShiftToggle();
           startTimerLoop();
-        } else if (loginSelectedRole === 'admin') {
-          await addLog('Admin', 'Tizimga kirdi');
+        } else {
+          loginErrorMessage.innerText = "Noto'g'ri parol!";
+        }
+      } else if (loginSelectedRole === 'admin') {
+        const correctAdminPw = localStorage.getItem('aura_admin_password') || 'admin';
+        if (password === correctAdminPw) {
+          addLog('Admin', 'Tizimga kirdi');
           sessionStorage.setItem('aura_logged_role', 'admin');
           loginOverlay.classList.remove('active');
           splashScreen.style.display = 'none';
@@ -7382,20 +7177,13 @@
           document.getElementById('app').style.display = 'none';
           document.getElementById('admin-app').style.display = 'flex';
           
-          // Re-fetch all data on login
-          await fetchCabinsFromSupabase();
-          await fetchProductsFromSupabase();
-          await fetchOrdersFromSupabase();
-          await fetchLogsFromSupabase();
-          await fetchActiveShiftFromSupabase();
-          
           // Trigger Admin Panel render
           if (typeof renderDashboard === 'function') {
             renderDashboard();
           }
+        } else {
+          loginErrorMessage.innerText = "Noto'g'ri parol!";
         }
-      } else {
-        loginErrorMessage.innerText = "Noto'g'ri parol!";
       }
     }
 
@@ -7406,7 +7194,7 @@
       }
     });
 
-    async function addLog(user, action) {
+    function addLog(user, action) {
       let finalUser = user;
       let finalAction = action;
       if (action === undefined) {
@@ -7414,108 +7202,29 @@
         finalAction = user;
       }
 
-      const { error } = await supabase
-        .from('system_logs')
-        .insert({
-          role: finalUser,
-          action: finalAction,
-          timestamp: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error("Error inserting system log:", error);
+      const storedLogs = localStorage.getItem('aura_logs_data');
+      const logsList = storedLogs ? JSON.parse(storedLogs) : [];
+      logsList.push({
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        user: finalUser,
+        action: finalAction
+      });
+      localStorage.setItem('aura_logs_data', JSON.stringify(logsList));
+      if (typeof logs !== 'undefined') {
+        logs = logsList;
       }
-
-      await fetchLogsFromSupabase();
+      supabaseSyncUp();
     }
 
-    function setupRealtimeSubscriptions() {
-      // Subscribe to sessions changes
-      supabase
-        .channel('public:sessions')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, async () => {
-          await fetchCabinsFromSupabase();
-          renderCabinsGrid();
-          updateTimers();
-        })
-        .subscribe();
-
-      // Subscribe to session_products changes
-      supabase
-        .channel('public:session_products')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'session_products' }, async () => {
-          await fetchCabinsFromSupabase();
-          updateActiveCabinDetailsView();
-        })
-        .subscribe();
-
-      // Subscribe to products changes
-      supabase
-        .channel('public:products')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, async () => {
-          await fetchProductsFromSupabase();
-          if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
-          const viewProds = document.getElementById('view-products');
-          if (viewProds && viewProds.classList.contains('active')) {
-            renderProductsList();
-          }
-        })
-        .subscribe();
-
-      // Subscribe to active_shift changes
-      supabase
-        .channel('public:active_shift')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'active_shift' }, async () => {
-          await fetchActiveShiftFromSupabase();
-          renderShiftToggle();
-          updateShiftTimer();
-        })
-        .subscribe();
-
-      // Subscribe to settings changes
-      supabase
-        .channel('public:settings')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, async () => {
-          await fetchSettingsFromSupabase();
-          CABINS_INITIAL.forEach(c => {
-            let price = c.pricePerHour;
-            if (c.id === 'VIP') {
-              price = prices.VIP;
-            } else if (prices[c.type]) {
-              price = prices[c.type];
-            }
-            c.pricePerHour = price;
-          });
-          cabins.forEach(c => {
-            let price = c.pricePerHour;
-            if (c.id === 'VIP') {
-              price = prices.VIP;
-            } else if (prices[c.type]) {
-              price = prices[c.type];
-            }
-            c.pricePerHour = price;
-          });
-          if (typeof loadPricesForm === 'function') loadPricesForm();
-        })
-        .subscribe();
-
-      // Subscribe to receipts changes
-      supabase
-        .channel('public:receipts')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'receipts' }, async () => {
-          await fetchOrdersFromSupabase();
-          if (typeof renderDashboard === 'function') renderDashboard();
-          if (typeof renderAdminShifts === 'function') renderAdminShifts();
-          const containerHist = document.getElementById('history-orders-list');
-          if (containerHist) {
-            if (typeof renderHistoryOrders === 'function') renderHistoryOrders();
-          }
-        })
-        .subscribe();
-    }
-
-    // Bind return button click event
+    // APP STARTUP INITS
     window.addEventListener('DOMContentLoaded', () => {
+      syncCabinsAndPricesWithAdmin();
+      loadDB();
+      lucide.createIcons();
+      startTimerLoop();
+
+      // Bind return button click event
       const returnBtn = document.getElementById('btn-back-to-admin');
       if (returnBtn) {
         returnBtn.addEventListener('click', () => {
@@ -7525,6 +7234,51 @@
             renderDashboard();
           }
         });
+      }
+
+      // Check role parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const isParamAdmin = urlParams.get('role') === 'admin';
+      
+      if (isParamAdmin) {
+        sessionStorage.setItem('aura_logged_role', 'admin');
+      }
+
+      const loggedRole = sessionStorage.getItem('aura_logged_role');
+      if (loggedRole === 'admin') {
+        // Skip splash screen
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+        
+        // Hide Operator, show Admin
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('admin-app').style.display = 'flex';
+        
+        // Render Admin panel
+        if (typeof renderDashboard === 'function') {
+          renderDashboard();
+        }
+      } else if (loggedRole === 'worker') {
+        // Skip splash screen
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+        
+        // Show Operator panel
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('admin-app').style.display = 'none';
+        
+        const returnBar = document.getElementById('admin-return-bar');
+        if (returnBar) returnBar.style.display = 'none';
+        
+        // Initial render
+        renderCabinsGrid();
+        showView('view-kabinalar');
+      } else {
+        // Show splash screen, hide admin-app
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('admin-app').style.display = 'none';
+        const returnBar = document.getElementById('admin-return-bar');
+        if (returnBar) returnBar.style.display = 'none';
       }
     });
 
@@ -9077,7 +8831,7 @@
     }
 
     if (formProduct) {
-      formProduct.addEventListener('submit', async (e) => {
+      formProduct.addEventListener('submit', (e) => {
         e.preventDefault();
         const mode = productFormMode.value;
         const id = productFormId.value;
@@ -9093,78 +8847,50 @@
           img = productImageUrlInput.value;
         }
 
-        const isHookah = category === 'Kalyanlar' || category === 'hookah';
-
         if (mode === 'add') {
           const finalIdStr = 'prod_' + Date.now();
-          const { error: errA } = await supabase
-            .from('products')
-            .insert({
-              id: finalIdStr,
-              name: name,
-              price: price,
-              is_hookah: isHookah,
-              manage_stock: !isHookah,
-              stock: stock,
-              admin_profit: adminProfit,
-              img: img
-            });
-            
-          if (errA) {
-            console.error("Error adding product to Supabase:", errA);
-            alert("Mahsulot qo'shishda xatolik yuz berdi!");
-            return;
-          }
+          products.push({
+            id: finalIdStr,
+            name: name,
+            price: price,
+            adminProfit: adminProfit,
+            stock: stock,
+            category: category,
+            img: img
+          });
 
-          await addLog(`Yangi mahsulot qo'shildi: ${name} (${formatMoney(price)})`);
+          addLog(`Yangi mahsulot qo'shildi: ${name} (${formatMoney(price)})`);
         } else {
-          const { error: errU } = await supabase
-            .from('products')
-            .update({
-              name: name,
-              price: price,
-              is_hookah: isHookah,
-              manage_stock: !isHookah,
-              stock: stock,
-              admin_profit: adminProfit,
-              img: img
-            })
-            .eq('id', id);
+          const p = products.find(prod => prod.id === id);
+          if (p) {
+            p.name = name;
+            p.price = price;
+            p.adminProfit = adminProfit;
+            p.stock = stock;
+            p.category = category;
+            p.img = img;
 
-          if (errU) {
-            console.error("Error updating product in Supabase:", errU);
-            alert("Mahsulotni yangilashda xatolik yuz berdi!");
-            return;
+            addLog(`Mahsulot tahrirlandi: ${name}`);
           }
-
-          await addLog(`Mahsulot tahrirlandi: ${name}`);
         }
 
-        await fetchProductsFromSupabase();
-        
+        saveDB();
         closeAllModals();
         renderAdminProductsList();
       });
     }
 
-    async function deleteProduct(productId) {
+    function deleteProduct(productId) {
       const p = PRODUCTS_LIST.find(prod => prod.id === productId);
       if (!p) return;
 
       if (confirm(`Ushbu mahsulotni o'chirib tashlashni xohlaysizmi? (${p.name})`)) {
-        const { error: errD } = await supabase
-          .from('products')
-          .delete()
-          .eq('id', productId);
-
-        if (errD) {
-          console.error("Error deleting product from Supabase:", errD);
-          alert("Mahsulotni o'chirishda xatolik yuz berdi! (U qaysidir buyurtmada ishlatilgan bo'lishi mumkin)");
-          return;
+        const idx = PRODUCTS_LIST.findIndex(prod => prod.id === productId);
+        if (idx !== -1) {
+          PRODUCTS_LIST.splice(idx, 1);
         }
-
-        await addLog(`Mahsulot o'chirildi: ${p.name}`);
-        await fetchProductsFromSupabase();
+        addLog(`Mahsulot o'chirildi: ${p.name}`);
+        saveDB();
         renderAdminProductsList();
       }
     }
@@ -9183,7 +8909,7 @@
     }
 
     if (formPrices) {
-      formPrices.addEventListener('submit', async (e) => {
+      formPrices.addEventListener('submit', (e) => {
         e.preventDefault();
         const oldPS4 = prices.PS4;
         const oldPS5 = prices.PS5;
@@ -9197,26 +8923,20 @@
         prices.PS5 = newPS5;
         prices.VIP = newVIP;
 
-        await saveSettingToSupabase('prices', prices);
-
-        const updatePromises = cabins.map(c => {
-          let newRate = newPS4;
+        // Sync to all existing cabins in database so changes apply
+        cabins.forEach(c => {
           if (c.id === 'VIP') {
-            newRate = newVIP;
+            c.pricePerHour = newVIP;
           } else if (c.type === 'PS5') {
-            newRate = newPS5;
+            c.pricePerHour = newPS5;
+          } else if (c.type === 'PS4') {
+            c.pricePerHour = newPS4;
           }
-          return supabase
-            .from('cabins')
-            .update({ price_per_hour: newRate })
-            .eq('id', c.id);
         });
 
-        await Promise.all(updatePromises);
-        await fetchCabinsFromSupabase();
+        addLog(`Soatlik standart narxlar o'zgartirildi: PS4 (${formatMoney(oldPS4)} -> ${formatMoney(newPS4)}), PS5 (${formatMoney(oldPS5)} -> ${formatMoney(newPS5)}), VIP (${formatMoney(oldVIP)} -> ${formatMoney(newVIP)})`);
 
-        await addLog(`Admin`, `Soatlik standart narxlar o'zgartirildi: PS4 (${formatMoney(oldPS4)} -> ${formatMoney(newPS4)}), PS5 (${formatMoney(oldPS5)} -> ${formatMoney(newPS5)}), VIP (${formatMoney(oldVIP)} -> ${formatMoney(newVIP)})`);
-
+        saveDB();
         alert("Soatlik narxlar muvaffaqiyatli saqlandi va barcha kabinalarga tatbiq etildi.");
       });
     }
@@ -10042,6 +9762,7 @@
       } else {
         localStorage.removeItem('aura_active_shift');
       }
+      supabaseSyncUp();
     }
 
     function renderShiftToggle() {
@@ -10184,19 +9905,22 @@
       `;
     }
 
-    async function renderAdminShifts() {
+    function renderAdminShifts() {
       const container = document.getElementById('shifts-history-list');
       if (!container) return;
       container.innerHTML = '';
 
-      await fetchShiftsHistoryFromSupabase();
+      const storedShifts = localStorage.getItem('aura_shifts_history');
+      const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
 
-      if (shiftsHistoryList.length === 0) {
+      if (shiftsHistory.length === 0) {
         container.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #9ca3af;">Hozircha smena hisobotlari yo`q.</td></tr>';
         return;
       }
 
-      shiftsHistoryList.forEach(s => {
+      shiftsHistory.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+      shiftsHistory.forEach(s => {
         const startDt = new Date(s.startTime);
         const endDt = new Date(s.endTime);
         const dateStr = startDt.toLocaleDateString('uz-UZ');
@@ -10222,62 +9946,12 @@
           <td style="color: #10b981; font-weight: 800;">${formatMoney(s.totalProfit || 0)}</td>
         `;
         
-        tr.addEventListener('click', async () => {
+        tr.addEventListener('click', () => {
           var shiftReportBody = document.getElementById('shift-report-body');
           if (shiftReportBody && typeof generateShiftReportHTML === 'function') {
-            shiftReportBody.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;">Hisobot yuklanmoqda...</div>';
-            document.getElementById('btn-save-shift').style.display = 'none';
-            document.getElementById('modal-shift-report').classList.add('active');
-
-            const { data: dbReceipts, error: errR } = await supabase
-              .from('receipts')
-              .select(`
-                *,
-                receipt_items (*)
-              `)
-              .gte('end_time', s.startTime)
-              .lte('end_time', s.endTime);
-
-            if (errR) {
-              console.error("Error fetching shift details:", errR);
-              shiftReportBody.innerHTML = '<div style="color: #ef4444; padding: 20px;">Hisobotni yuklashda xatolik yuz berdi.</div>';
-              return;
-            }
-
-            const drinksMap = {};
-            const kalyanMap = {};
-
-            dbReceipts.forEach(o => {
-              o.receipt_items.forEach(p => {
-                const prodSum = p.price * p.quantity;
-                if (p.is_hookah) {
-                  let pProfit = 0;
-                  if (p.price === 80000) {
-                    pProfit = 25000 * p.quantity;
-                  } else if (p.price === 95000) {
-                    pProfit = 40000 * p.quantity;
-                  } else if (p.price === 110000) {
-                    pProfit = 45000 * p.quantity;
-                  } else {
-                    const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.product_id);
-                    pProfit = originalProd && originalProd.adminProfit !== undefined ? (Number(originalProd.adminProfit) * p.quantity) : (p.price * 0.45 * p.quantity);
-                  }
-                  if (!kalyanMap[p.product_id]) kalyanMap[p.product_id] = { name: p.name, qty: 0, total: 0, profit: 0 };
-                  kalyanMap[p.product_id].qty += p.quantity;
-                  kalyanMap[p.product_id].total += prodSum;
-                  kalyanMap[p.product_id].profit += pProfit;
-                } else {
-                  if (!drinksMap[p.product_id]) drinksMap[p.product_id] = { name: p.name, qty: 0, total: 0 };
-                  drinksMap[p.product_id].qty += p.quantity;
-                  drinksMap[p.product_id].total += prodSum;
-                }
-              });
-            });
-
-            s.drinksList = Object.values(drinksMap);
-            s.kalyanList = Object.values(kalyanMap);
-
             shiftReportBody.innerHTML = generateShiftReportHTML(s);
+            document.getElementById('btn-save-shift').style.display = 'none'; // hide save button in readonly mode
+            document.getElementById('modal-shift-report').classList.add('active');
           }
         });
         
@@ -10294,13 +9968,9 @@
     // Removed broken dynamic hook
 
     // ── PAGE LOAD INITIALIZER ──
-    async function initializePage() {
+    function initializePage() {
       console.log("AuraUI: Initializing page components...");
-      
-      // Load Supabase Database State
-      await initSupabaseDB();
-      setupRealtimeSubscriptions();
-      
+      loadDB();
       AuraUI.initAll();
       
       // Set current date on header
@@ -10311,14 +9981,6 @@
         dateHeader.innerText = `Bugun: ${dStr}`;
       }
       
-      // Check role parameters
-      const urlParams = new URLSearchParams(window.location.search);
-      const isParamAdmin = urlParams.get('role') === 'admin';
-      
-      if (isParamAdmin) {
-        sessionStorage.setItem('aura_logged_role', 'admin');
-      }
-
       // Restore session state
       const loggedRole = sessionStorage.getItem('aura_logged_role');
       if (loggedRole === 'worker') {
@@ -10346,6 +10008,10 @@
         document.getElementById('app').style.display = 'block';
         document.getElementById('admin-app').style.display = 'none';
       }
+
+      // Initialize Supabase sync and real-time subscription
+      supabaseSyncDown();
+      setupSupabaseRealtime();
     }
 
     if (document.readyState === 'loading') {
@@ -10360,6 +10026,20 @@
     var modalShiftReport = document.getElementById('modal-shift-report');
     var shiftReportBody = document.getElementById('shift-report-body');
     var btnSaveShift = document.getElementById('btn-save-shift');
+
+    function getActiveShift() {
+      const s = localStorage.getItem('aura_active_shift');
+      return s ? JSON.parse(s) : null;
+    }
+
+    function setActiveShift(shiftObj) {
+      if (shiftObj) {
+        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
+      } else {
+        localStorage.removeItem('aura_active_shift');
+      }
+      supabaseSyncUp();
+    }
 
     function renderShiftToggle() {
       if (!btnShiftToggle) return;
@@ -10518,30 +10198,11 @@
 
     var currentCalculatedShift = null;
 
-    async function startShift() {
-      const loggedUserRole = sessionStorage.getItem('aura_logged_role') || 'operator';
-      const roleName = loggedUserRole === 'admin' ? 'admin' : 'operator';
-      
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id')
-        .eq('role', roleName)
-        .limit(1)
-        .single();
-        
-      const userId = userData ? userData.id : null;
-      
-      const newShift = await startShiftInSupabase(userId);
-      if (newShift) {
-        activeShiftState = {
-          startTime: newShift.start_time,
-          userId: newShift.user_id
-        };
-      }
-      
+    function startShift() {
+      setActiveShift({ startTime: new Date().toISOString() });
       renderShiftToggle();
       updateShiftTimer();
-      await addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
+      addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
     }
 
     function finishShift() {
@@ -10654,10 +10315,10 @@
     }
 
     if (btnShiftToggle) {
-      btnShiftToggle.addEventListener('click', async () => {
+      btnShiftToggle.addEventListener('click', () => {
         const activeShift = getActiveShift();
         if (!activeShift) {
-          await startShift();
+          startShift();
         } else {
           finishShift();
         }
@@ -10665,71 +10326,26 @@
     }
 
     if (btnSaveShift) {
-      btnSaveShift.addEventListener('click', async () => {
+      btnSaveShift.addEventListener('click', () => {
         if (!currentCalculatedShift || btnSaveShift.disabled) return;
         
         btnSaveShift.disabled = true;
         const previousText = btnSaveShift.innerHTML;
         btnSaveShift.innerHTML = 'Saqlanmoqda...';
 
-        const loggedUserRole = sessionStorage.getItem('aura_logged_role') || 'operator';
-        const roleName = loggedUserRole === 'admin' ? 'admin' : 'operator';
+        // Save to shifts history
+        const storedShifts = localStorage.getItem('aura_shifts_history');
+        const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
+        shiftsHistory.push(currentCalculatedShift);
+        localStorage.setItem('aura_shifts_history', JSON.stringify(shiftsHistory));
         
-        const { data: userData } = await supabase
-          .from('users')
-          .select('id')
-          .eq('role', roleName)
-          .limit(1)
-          .single();
-          
-        const userId = userData ? userData.id : null;
-
-        // Save to shifts_reports table in Supabase
-        const { error: errS } = await supabase
-          .from('shift_reports')
-          .insert({
-            id: currentCalculatedShift.id,
-            user_id: userId,
-            start_time: currentCalculatedShift.startTime,
-            end_time: currentCalculatedShift.endTime,
-            ps4_amount: currentCalculatedShift.ps4Amount,
-            ps4_hours: currentCalculatedShift.ps4Hours,
-            ps4_count: currentCalculatedShift.ps4Count,
-            ps5_amount: currentCalculatedShift.ps5Amount,
-            ps5_hours: currentCalculatedShift.ps5Hours,
-            ps5_count: currentCalculatedShift.ps5Count,
-            vip_amount: currentCalculatedShift.vipAmount,
-            vip_hours: currentCalculatedShift.vipHours,
-            vip_count: currentCalculatedShift.vipCount,
-            total_play_amount: currentCalculatedShift.totalPlayAmount,
-            total_drinks_amount: currentCalculatedShift.totalDrinksAmount,
-            total_kalyan_amount: currentCalculatedShift.totalKalyanAmount,
-            total_kalyan_profit: currentCalculatedShift.totalKalyanProfit,
-            total_sales: currentCalculatedShift.totalSales,
-            total_profit: currentCalculatedShift.totalProfit,
-            total_clients: currentCalculatedShift.totalClients,
-            total_sessions: currentCalculatedShift.totalSessions
-          });
-
-        if (errS) {
-          console.error("Error saving shift report in Supabase:", errS);
-          alert("Smena hisobotini saqlashda xatolik yuz berdi!");
-          btnSaveShift.disabled = false;
-          btnSaveShift.innerHTML = previousText;
-          return;
-        }
-
-        // Delete active shift in Supabase
-        await endShiftInSupabase();
-        activeShiftState = null;
+        // Clear active shift and calculated data to prevent resubmission
+        setActiveShift(null);
         currentCalculatedShift = null;
-
-        await fetchActiveShiftFromSupabase();
-        await fetchShiftsHistoryFromSupabase();
         
         renderShiftToggle();
         modalShiftReport.classList.remove('active');
-        await addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi');
+        addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi');
         
         // Refresh admin side if needed
         if (typeof renderAdminShifts === 'function') renderAdminShifts();
