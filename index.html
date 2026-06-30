@@ -3892,7 +3892,12 @@
             Ish vaqti: 00:00:00
           </div>
         </div>
-        <div class="header-right">
+        <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
+          <!-- Supabase status indicator -->
+          <div id="supabase-status-indicator" style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 20px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); cursor: pointer;" title="Ulanmagan">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444;" id="supabase-status-dot"></span>
+            <span id="supabase-status-text">Offline</span>
+          </div>
           <div class="bell-container">
             <button class="icon-btn"><i data-lucide="bell"></i></button>
             <span class="notification-badge"></span>
@@ -4459,7 +4464,12 @@
           <button class="sidebar-toggle-btn" id="btn-sidebar-toggle"><i data-lucide="menu"></i></button>
           <h1 class="header-title" id="page-title">Dashboard</h1>
         </div>
-        <div class="header-right">
+        <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
+          <!-- Supabase status indicator (Admin) -->
+          <div id="supabase-status-indicator-admin" style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 20px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); cursor: pointer;" title="Ulanmagan">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444;" id="supabase-status-dot-admin"></span>
+            <span id="supabase-status-text-admin">Offline</span>
+          </div>
           <div class="header-date" id="current-date">Bugun: 26-Iyun, 2026</div>
         </div>
       </header>
@@ -5115,8 +5125,63 @@
       console.error("Supabase CDN failed to load.");
     }
 
+    function updateSupabaseStatus(status, details = '') {
+      const statuses = [
+        {
+          dot: document.getElementById('supabase-status-dot'),
+          text: document.getElementById('supabase-status-text'),
+          container: document.getElementById('supabase-status-indicator')
+        },
+        {
+          dot: document.getElementById('supabase-status-dot-admin'),
+          text: document.getElementById('supabase-status-text-admin'),
+          container: document.getElementById('supabase-status-indicator-admin')
+        }
+      ];
+
+      statuses.forEach(elements => {
+        const { dot, text, container } = elements;
+        if (!dot || !text || !container) return;
+
+        container.onclick = () => {
+          if (details) {
+            alert("Supabase ulanish xatoligi tafsilotlari:\n" + details + "\n\nIltimos, Supabase-da jadval to'g'ri yaratilgani va RLS o'chirilganligini tekshiring.");
+          } else {
+            alert("Supabase muvaffaqiyatli ulangan va ishlamoqda. Real-time faol!");
+          }
+        };
+
+        if (status === 'connected') {
+          container.style.background = 'rgba(16, 185, 129, 0.1)';
+          container.style.color = '#10b981';
+          container.style.border = '1px solid rgba(16, 185, 129, 0.2)';
+          dot.style.background = '#10b981';
+          text.innerText = 'Online';
+          container.title = 'Real-time faol';
+        } else if (status === 'syncing') {
+          container.style.background = 'rgba(245, 158, 11, 0.1)';
+          container.style.color = '#f59e0b';
+          container.style.border = '1px solid rgba(245, 158, 11, 0.2)';
+          dot.style.background = '#f59e0b';
+          text.innerText = 'Sinxronlanmoqda...';
+          container.title = 'Sinxronlanmoqda';
+        } else {
+          container.style.background = 'rgba(239, 68, 68, 0.1)';
+          container.style.color = '#ef4444';
+          container.style.border = '1px solid rgba(239, 68, 68, 0.2)';
+          dot.style.background = '#ef4444';
+          text.innerText = 'Offline';
+          container.title = details ? `Xatolik: ${details}` : 'Ulanmagan';
+        }
+      });
+    }
+
     async function supabaseSyncUp() {
-      if (!supabaseClient) return;
+      if (!supabaseClient) {
+        updateSupabaseStatus('error', 'Supabase Client yuklanmagan');
+        return;
+      }
+      updateSupabaseStatus('syncing');
       try {
         const activeShift = localStorage.getItem('aura_active_shift') ? JSON.parse(localStorage.getItem('aura_active_shift')) : null;
         const shiftsHistory = localStorage.getItem('aura_shifts_history') ? JSON.parse(localStorage.getItem('aura_shifts_history')) : [];
@@ -5139,14 +5204,24 @@
             worker_password: workerPassword,
             updated_at: new Date().toISOString()
           });
-        if (error) console.error("Supabase sync up error:", error);
+        if (error) {
+          console.error("Supabase sync up error:", error);
+          updateSupabaseStatus('error', error.message);
+        } else {
+          updateSupabaseStatus('connected');
+        }
       } catch (err) {
         console.error("Supabase sync up exception:", err);
+        updateSupabaseStatus('error', err.message || err);
       }
     }
 
     async function supabaseSyncDown() {
-      if (!supabaseClient) return;
+      if (!supabaseClient) {
+        updateSupabaseStatus('error', 'Supabase Client yuklanmagan');
+        return;
+      }
+      updateSupabaseStatus('syncing');
       try {
         const { data, error } = await supabaseClient
           .from('aura_state')
@@ -5156,18 +5231,21 @@
 
         if (error) {
           console.error("Supabase sync down error:", error);
+          updateSupabaseStatus('error', error.message);
           return;
         }
 
         if (data) {
           console.log("Supabase State Loaded Successfully.");
           applyIncomingState(data);
+          updateSupabaseStatus('connected');
         } else {
           console.log("Supabase has no data. Uploading current state as global initial state...");
           await supabaseSyncUp();
         }
       } catch (err) {
         console.error("Supabase sync down exception:", err);
+        updateSupabaseStatus('error', err.message || err);
       }
     }
 
@@ -5265,10 +5343,16 @@
           console.log('Real-time updates received from Supabase:', payload);
           if (payload.new) {
             applyIncomingState(payload.new);
+            updateSupabaseStatus('connected');
           }
         })
         .subscribe((status) => {
           console.log("Supabase Real-time Subscription Status:", status);
+          if (status === 'SUBSCRIBED') {
+            updateSupabaseStatus('connected');
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            updateSupabaseStatus('error', 'Real-time ulanishi yopildi yoki xatolik yuz berdi');
+          }
         });
     }
 
