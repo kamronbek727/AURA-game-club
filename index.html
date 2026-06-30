@@ -5239,28 +5239,81 @@
           return { ...c, session: cleanSession };
         });
 
-        const { error } = await supabaseClient
-          .from('aura_state')
-          .upsert({
-            id: 'global',
-            cabins: cleanCabins,
-            orders: orders,
-            receipt_counter: receiptCounter,
-            products: PRODUCTS_LIST,
-            prices: prices,
-            logs: logs,
-            active_shift: activeShift,
-            shifts_history: shiftsHistory,
-            admin_password: adminPassword,
-            worker_password: workerPassword,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'id' });
-        if (error) {
-          console.error('Supabase sync up error:', error);
-          updateSupabaseStatus('error', error.message);
-        } else {
-          updateSupabaseStatus('connected');
+    // ==========================================
+    // SUPABASE RELATIONAL DATA SYNC LOGIC
+    // ==========================================
+    
+    async function supabaseSyncUp() {
+      if (!supabaseClient) return;
+      updateSupabaseStatus('syncing');
+      try {
+        const cleanCabins = cabins.map(c => {
+          let cleanSession = null;
+          if (c.session) {
+            const { remainingSeconds, elapsedSeconds, ...rest } = c.session;
+            cleanSession = rest;
+          }
+          return {
+            id: c.id,
+            name: c.name,
+            type: c.type,
+            price_per_hour: c.pricePerHour,
+            status: c.status,
+            session: cleanSession
+          };
+        });
+
+        const pProducts = PRODUCTS_LIST.map(p => ({
+            id: p.id, name: p.name, category: p.category || p.type, price: p.price, stock: p.stock, icon: p.icon
+        }));
+
+        const pOrders = orders.map(o => ({
+            id: o.id || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            type: o.type || 'Sotuv',
+            total_amount: o.totalAmount || o.total || 0,
+            details: o
+        }));
+
+        let pShifts = [];
+        if (activeShift) {
+           pShifts.push({
+             id: activeShift.id || 'SHIFT-ACTIVE',
+             started_at: activeShift.startTime || new Date().toISOString(),
+             is_active: true,
+             total_revenue: activeShift.totalAmount || 0,
+             total_orders: activeShift.orderCount || 0
+           });
         }
+        shiftsHistory.forEach(s => {
+           pShifts.push({
+             id: s.id || `SHIFT-${s.startTime}`,
+             started_at: s.startTime,
+             ended_at: s.endTime,
+             is_active: false,
+             total_revenue: s.totalAmount || s.totalRevenue || 0,
+             total_orders: s.orderCount || 0
+           });
+        });
+
+        const pSettings = [
+          { key: 'passwords', value: { admin: adminPassword, worker: workerPassword } },
+          { key: 'prices', value: prices }
+        ];
+
+        // Parallel Upserts for efficiency
+        const [cRes, pRes, oRes, sRes, setRes] = await Promise.all([
+          supabaseClient.from('cabins').upsert(cleanCabins, { onConflict: 'id' }),
+          supabaseClient.from('products').upsert(pProducts, { onConflict: 'id' }),
+          supabaseClient.from('orders').upsert(pOrders, { onConflict: 'id' }),
+          pShifts.length > 0 ? supabaseClient.from('shifts').upsert(pShifts, { onConflict: 'id' }) : Promise.resolve({}),
+          supabaseClient.from('settings').upsert(pSettings, { onConflict: 'key' })
+        ]);
+
+        if (cRes.error || pRes.error || oRes.error || (sRes && sRes.error) || setRes.error) {
+            console.error('Supabase Sync Up Error Details:', cRes.error, pRes.error, oRes.error, sRes?.error, setRes.error);
+        }
+
+        updateSupabaseStatus('connected');
       } catch (err) {
         console.error('Supabase sync up exception:', err);
         updateSupabaseStatus('error', err.message || err);
@@ -5274,105 +5327,120 @@
       }
       updateSupabaseStatus('syncing');
       try {
-        // .select() array qaytaradi — maybeSingle() o'rniga ishonchli usul
-        const { data: rows, error } = await supabaseClient
-          .from('aura_state')
-          .select('*')
-          .eq('id', 'global')
-          .limit(1);
+        const [cabinsRes, productsRes, ordersRes, shiftsRes, settingsRes] = await Promise.all([
+          supabaseClient.from('cabins').select('*'),
+          supabaseClient.from('products').select('*'),
+          supabaseClient.from('orders').select('*').order('created_at', { ascending: false }),
+          supabaseClient.from('shifts').select('*'),
+          supabaseClient.from('settings').select('*')
+        ]);
 
-        if (error) {
-          console.error('Supabase sync down error:', error);
-          updateSupabaseStatus('error', error.message);
-          return;
+        if (cabinsRes.error) throw cabinsRes.error;
+
+        // 1. Cabins
+        if (cabinsRes.data && cabinsRes.data.length > 0) {
+           cabins = cabinsRes.data.map(c => ({
+             id: c.id,
+             name: c.name,
+             type: c.type,
+             pricePerHour: c.price_per_hour,
+             status: c.status,
+             session: c.session
+           }));
         }
 
-        const data = rows && rows.length > 0 ? rows[0] : null;
-
-        if (data) {
-          console.log('Supabase State Loaded Successfully.');
-          applyIncomingState(data);
-          updateSupabaseStatus('connected');
-        } else {
-          // ✅ Ma'lumot yo'q — mahalliy holatdan foydalaniladi
-          // Boshqa brauzer ma'lumotlarini o'chirmaslik uchun YUKLANMAYDI
-          // Keyingi o'zgarish (sessiya boshlash, smena boshlash) Supabase-ni yangilaydi
-          console.log('Supabase has no data yet. Using local state.');
-          updateSupabaseStatus('connected');
+        // 2. Products
+        if (productsRes.data && productsRes.data.length > 0) {
+           PRODUCTS_LIST.length = 0;
+           productsRes.data.forEach(p => PRODUCTS_LIST.push({
+               ...p, category: p.category, type: p.category
+           }));
+           if (typeof products !== 'undefined') products = PRODUCTS_LIST;
         }
+
+        // 3. Orders
+        if (ordersRes.data) {
+           orders = ordersRes.data.map(o => ({
+              ...o.details,
+              id: o.id,
+              type: o.type,
+              totalAmount: o.total_amount,
+              created_at: o.created_at || o.details.created_at
+           }));
+        }
+
+        // 4. Shifts
+        if (shiftsRes.data) {
+           const act = shiftsRes.data.find(s => s.is_active);
+           if (act) {
+              activeShift = { id: act.id, startTime: act.started_at, totalAmount: act.total_revenue, orderCount: act.total_orders, ...act };
+           } else { 
+              activeShift = null; 
+           }
+
+           shiftsHistory = shiftsRes.data.filter(s => !s.is_active).map(s => ({
+              ...s,
+              id: s.id,
+              startTime: s.started_at,
+              endTime: s.ended_at,
+              totalAmount: s.total_revenue,
+              orderCount: s.total_orders
+           })).sort((a,b) => new Date(b.startTime) - new Date(a.startTime));
+        }
+
+        // 5. Settings
+        if (settingsRes.data) {
+           const pw = settingsRes.data.find(s => s.key === 'passwords');
+           if (pw && pw.value) {
+             adminPassword = pw.value.admin || 'admin';
+             workerPassword = pw.value.worker || '1111';
+           }
+           const pr = settingsRes.data.find(s => s.key === 'prices');
+           if (pr && pr.value) {
+             prices = pr.value;
+           }
+        }
+
+        console.log('Supabase Relational State Loaded Successfully.');
+        refreshAllUI();
+        updateSupabaseStatus('connected');
       } catch (err) {
         console.error('Supabase sync down exception:', err);
         updateSupabaseStatus('error', err.message || err);
       }
     }
 
-    function applyIncomingState(state) {
-      if (!state) return;
-
-      // 1. Update in-memory state variables
-      if (state.cabins) cabins = state.cabins;
-      if (state.orders) orders = state.orders;
-      if (state.receipt_counter !== undefined && state.receipt_counter !== null) {
-        receiptCounter = state.receipt_counter;
-      }
-      if (state.prices) prices = state.prices;
-      if (state.logs) logs = state.logs;
-
-      if (state.products) {
-        PRODUCTS_LIST.length = 0;
-        state.products.forEach(p => PRODUCTS_LIST.push(p));
-      }
-      
-      // Keep 'products' variable in sync
-      if (typeof products !== 'undefined') {
-        products = PRODUCTS_LIST;
-      }
-
-      // Sync active shift & shift history & credentials to global state
-      if (state.active_shift !== undefined) {
-        activeShift = state.active_shift;
-      }
-      if (state.shifts_history) {
-        shiftsHistory = state.shifts_history;
-      }
-      if (state.admin_password) {
-        adminPassword = state.admin_password;
-      }
-      if (state.worker_password) {
-        workerPassword = state.worker_password;
-      }
-
-      // 3. Re-render UI views
-      refreshAllUI();
-    }
-
     function refreshAllUI() {
       try {
-        // Client-side renders
-        if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
-        if (typeof renderShiftToggle === 'function') renderShiftToggle();
-        if (typeof renderHistoryOrders === 'function') renderHistoryOrders();
-        if (typeof renderLogsList === 'function') renderLogsList();
+        const loggedRole = sessionStorage.getItem('aura_logged_role');
 
-        // Check details view active state
-        const detailsView = document.getElementById('view-details');
-        if (detailsView && detailsView.classList.contains('active') && activeCabinId !== null) {
-          const cabin = cabins.find(c => c.id === activeCabinId);
-          if (!cabin || !cabin.session) {
-            showView('view-kabinalar');
-          } else {
-            if (typeof updateActiveCabinDetailsView === 'function') updateActiveCabinDetailsView();
+        // Worker-side renders
+        if (loggedRole === 'worker' || loggedRole === null) {
+          if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
+          if (typeof renderShiftToggle === 'function') renderShiftToggle();
+          if (typeof renderHistoryOrders === 'function') renderHistoryOrders();
+          if (typeof renderLogsList === 'function') renderLogsList();
+
+          const detailsView = document.getElementById('view-details');
+          if (detailsView && detailsView.classList.contains('active') && activeCabinId !== null) {
+            const cabin = cabins.find(c => c.id === activeCabinId);
+            if (!cabin || !cabin.session) {
+              showView('view-kabinalar');
+            } else {
+              if (typeof updateActiveCabinDetailsView === 'function') updateActiveCabinDetailsView();
+            }
           }
         }
 
         // Admin-side renders
-        const loggedRole = sessionStorage.getItem('aura_logged_role');
         if (loggedRole === 'admin') {
           if (typeof renderDashboard === 'function') renderDashboard();
           if (typeof renderCabinsList === 'function') renderCabinsList();
           if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
           if (typeof renderAdminHistoryOrders === 'function') renderAdminHistoryOrders();
           if (typeof renderAdminShifts === 'function') renderAdminShifts();
+          if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
+          if (typeof renderShiftToggle === 'function') renderShiftToggle();
         }
       } catch (err) {
         console.error("UI refresh failed:", err);
@@ -5381,21 +5449,26 @@
 
     function setupSupabaseRealtime() {
       if (!supabaseClient) return;
+
+      // Realtime kanali orqali har qanday jadvaldagi o'zgarish eshitiladi
+      // Oddiylik va xavfsizlik uchun, biron jadval o'zgarganda to'liq qayta yuklanadi (Sync Down)
+      // Bu bizni "race condition" dan saqlaydi va hamma data aktual bo'ladi
       supabaseClient
-        .channel('public:aura_state')
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'aura_state', filter: 'id=eq.global' }, payload => {
-          console.log('Real-time updates received from Supabase:', payload);
-          if (payload.new) {
-            applyIncomingState(payload.new);
-            updateSupabaseStatus('connected');
+        .channel('public_db_changes')
+        .on('postgres_changes', { event: '*', schema: 'public' }, payload => {
+          console.log('Supabase Realtime Triggered on table:', payload.table);
+          // O'zgarish o'zimiznikidan (lokaldan) emasligini qisman tasdiqlash uchun (throttle)
+          if (!window._syncTimeout) {
+            window._syncTimeout = setTimeout(() => {
+               supabaseSyncDown();
+               window._syncTimeout = null;
+            }, 500);
           }
         })
         .subscribe((status) => {
-          console.log("Supabase Real-time Subscription Status:", status);
+          console.log("Supabase Real-time Status:", status);
           if (status === 'SUBSCRIBED') {
             updateSupabaseStatus('connected');
-          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-            updateSupabaseStatus('error', 'Real-time ulanishi yopildi yoki xatolik yuz berdi');
           }
         });
     }
@@ -7170,68 +7243,63 @@
       supabaseSyncUp();
     }
 
-    // APP STARTUP INITS
-    window.addEventListener('DOMContentLoaded', () => {
+    // APP STARTUP INITS — bitta martalik, Supabase yuklanishini kutadi
+    window.addEventListener('DOMContentLoaded', async () => {
+      // 1. Default fallback state o'rnatamiz
       loadDB();
       lucide.createIcons();
-      startTimerLoop();
 
-      // Bind return button click event
+      // 2. Bind return button click event
       const returnBtn = document.getElementById('btn-back-to-admin');
       if (returnBtn) {
         returnBtn.addEventListener('click', () => {
           document.getElementById('app').style.display = 'none';
           document.getElementById('admin-app').style.display = 'flex';
-          if (typeof renderDashboard === 'function') {
-            renderDashboard();
-          }
+          if (typeof renderDashboard === 'function') renderDashboard();
         });
       }
 
-      // Check role parameters
+      // 3. URL param orqali admin kirishi
       const urlParams = new URLSearchParams(window.location.search);
-      const isParamAdmin = urlParams.get('role') === 'admin';
-      
-      if (isParamAdmin) {
+      if (urlParams.get('role') === 'admin') {
         sessionStorage.setItem('aura_logged_role', 'admin');
       }
 
+      // 4. Supabase'dan haqiqiy ma'lumotlarni OLDIN yuklaymiz
+      await supabaseSyncDown();
+      await syncServerTime();
+      setupSupabaseRealtime();
+
+      // 5. Ma'lumot yuklangandan KEYIN UI ko'rsatamiz
       const loggedRole = sessionStorage.getItem('aura_logged_role');
       if (loggedRole === 'admin') {
-        // Skip splash screen
         const splash = document.getElementById('splash-screen');
         if (splash) splash.style.display = 'none';
-        
-        // Hide Operator, show Admin
         document.getElementById('app').style.display = 'none';
         document.getElementById('admin-app').style.display = 'flex';
-        
-        // Render Admin panel
-        if (typeof renderDashboard === 'function') {
-          renderDashboard();
-        }
+        if (typeof renderDashboard === 'function') renderDashboard();
+        if (typeof renderCabinsList === 'function') renderCabinsList();
+        if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
+        if (typeof renderAdminHistoryOrders === 'function') renderAdminHistoryOrders();
+        if (typeof renderAdminShifts === 'function') renderAdminShifts();
       } else if (loggedRole === 'worker') {
-        // Skip splash screen
         const splash = document.getElementById('splash-screen');
         if (splash) splash.style.display = 'none';
-        
-        // Show Operator panel
         document.getElementById('app').style.display = 'block';
         document.getElementById('admin-app').style.display = 'none';
-        
         const returnBar = document.getElementById('admin-return-bar');
         if (returnBar) returnBar.style.display = 'none';
-        
-        // Initial render
         renderCabinsGrid();
         showView('view-kabinalar');
+        if (typeof renderShiftToggle === 'function') renderShiftToggle();
       } else {
-        // Show splash screen, hide admin-app
         document.getElementById('app').style.display = 'block';
         document.getElementById('admin-app').style.display = 'none';
         const returnBar = document.getElementById('admin-return-bar');
         if (returnBar) returnBar.style.display = 'none';
       }
+
+      startTimerLoop();
     });
 
     // Link local variables to admin names
