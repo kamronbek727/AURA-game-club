@@ -5056,14 +5056,7 @@
     </div>
   </div>
 
-  <!-- Floating Debug Panel for Supabase -->
-  <div id="supabase-debug-panel" style="position: fixed; bottom: 80px; right: 20px; width: 320px; max-height: 250px; background: rgba(0,0,0,0.9); color: #00ff00; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 8px; z-index: 10000; overflow-y: auto; border: 1px solid #333; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-    <div style="font-weight: bold; border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 3px; display: flex; justify-content: space-between; align-items: center; color: #fff;">
-      <span>Supabase Debug Log</span>
-      <button onclick="document.getElementById('supabase-debug-panel').style.display='none'" style="background: none; border: none; color: #ff5555; cursor: pointer; font-weight: bold; font-size: 12px; padding: 0 5px;">[X]</button>
-    </div>
-    <div id="supabase-debug-content"></div>
-  </div>
+
 
   </div> <!-- /app-container -->
 
@@ -5127,6 +5120,38 @@
     const SUPABASE_URL = 'https://qbxyegberalhadbiknhi.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_ChEM6ocRfWTC6OalK5ecCg_jdpunIfq';
     let supabaseClient = null;
+
+    // Server vaqti bilan qurilma vaqtining farqi (ms). Vaqt adashishini tuzatish uchun.
+    let serverTimeOffset = 0;
+
+    // Server vaqtini olish va offset hisoblash
+    async function syncServerTime() {
+      try {
+        const localBefore = Date.now();
+        const { data, error } = await supabaseClient
+          .from('aura_state')
+          .select('updated_at')
+          .eq('id', 'global')
+          .maybeSingle();
+        const localAfter = Date.now();
+        if (!error && data && data.updated_at) {
+          const serverTime = new Date(data.updated_at).getTime();
+          const localMid = Math.round((localBefore + localAfter) / 2);
+          // Only use offset if we recently updated (within last 30s)
+          if (localAfter - serverTime < 30000) {
+            serverTimeOffset = serverTime - localMid;
+            console.log('Server time offset calculated:', serverTimeOffset, 'ms');
+          }
+        }
+      } catch(e) {
+        // ignore
+      }
+    }
+
+    // Haqiqiy vaqtni server bilan moslashtirib qaytaradi
+    function getNow() {
+      return new Date(Date.now() + serverTimeOffset);
+    }
 
     if (typeof supabase !== 'undefined') {
       supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -5532,7 +5557,7 @@
 
     // DYNAMIC TIMER UPDATE ENGINE
     function updateTimers() {
-      const now = new Date();
+      const now = getNow(); // Server vaqti bilan moslashtirilgan vaqt
       let hasActive = false;
       let needGridRefresh = false;
 
@@ -9879,8 +9904,9 @@
 
     function updateShiftTimer() {
       const activeShift = getActiveShift();
-      if (activeShift && shiftTimerDisplay) {
-        const now = new Date();
+      const _timerEl = document.getElementById('shift-timer-display');
+      if (activeShift && _timerEl) {
+        const now = getNow(); // Server vaqti bilan moslashtirilgan
         const start = new Date(activeShift.startTime);
         const diffSecs = Math.floor((now - start) / 1000);
         
@@ -9888,7 +9914,7 @@
         const m = Math.floor((diffSecs % 3600) / 60).toString().padStart(2, '0');
         const s = (diffSecs % 60).toString().padStart(2, '0');
         
-        shiftTimerDisplay.innerText = `Ish vaqti: ${h}:${m}:${s}`;
+        _timerEl.innerText = `Ish vaqti: ${h}:${m}:${s}`;
       }
     }
 
@@ -10105,7 +10131,7 @@
       }
 
       // Initialize Supabase sync and real-time subscription
-      supabaseSyncDown();
+      supabaseSyncDown().then(() => syncServerTime());
       setupSupabaseRealtime();
     }
 
@@ -10157,8 +10183,9 @@
 
     function updateShiftTimer() {
       const activeShift = getActiveShift();
-      if (activeShift && shiftTimerDisplay) {
-        const now = new Date();
+      const _timerEl = document.getElementById('shift-timer-display');
+      if (activeShift && _timerEl) {
+        const now = getNow(); // Server vaqti bilan moslashtirilgan
         const start = new Date(activeShift.startTime);
         const diffSecs = Math.floor((now - start) / 1000);
         
@@ -10166,7 +10193,7 @@
         const m = Math.floor((diffSecs % 3600) / 60).toString().padStart(2, '0');
         const s = (diffSecs % 60).toString().padStart(2, '0');
         
-        shiftTimerDisplay.innerText = `Ish vaqti: ${h}:${m}:${s}`;
+        _timerEl.innerText = `Ish vaqti: ${h}:${m}:${s}`;
       }
     }
 
