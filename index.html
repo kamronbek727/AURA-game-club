@@ -5221,11 +5221,19 @@
         const adminPassword = localStorage.getItem('aura_admin_password') || 'admin';
         const workerPassword = localStorage.getItem('aura_worker_password') || '1111';
 
+        // ✅ Computed fieldlarni o'chirib, faqat toza timestamp ma'lumotlarini yuklaymiz
+        // remainingSeconds va elapsedSeconds SAQLANMAYDI — ular har safar hisoblanadi
+        const cleanCabins = cabins.map(c => {
+          if (!c.session) return c;
+          const { remainingSeconds, elapsedSeconds, ...cleanSession } = c.session;
+          return { ...c, session: cleanSession };
+        });
+
         const { error } = await supabaseClient
           .from('aura_state')
           .upsert({
             id: 'global',
-            cabins: cabins,
+            cabins: cleanCabins,
             orders: orders,
             receipt_counter: receiptCounter,
             products: PRODUCTS_LIST,
@@ -5236,15 +5244,15 @@
             admin_password: adminPassword,
             worker_password: workerPassword,
             updated_at: new Date().toISOString()
-          });
+          }, { onConflict: 'id' });
         if (error) {
-          console.error("Supabase sync up error:", error);
+          console.error('Supabase sync up error:', error);
           updateSupabaseStatus('error', error.message);
         } else {
           updateSupabaseStatus('connected');
         }
       } catch (err) {
-        console.error("Supabase sync up exception:", err);
+        console.error('Supabase sync up exception:', err);
         updateSupabaseStatus('error', err.message || err);
       }
     }
@@ -5256,28 +5264,34 @@
       }
       updateSupabaseStatus('syncing');
       try {
-        const { data, error } = await supabaseClient
+        // .select() array qaytaradi — maybeSingle() o'rniga ishonchli usul
+        const { data: rows, error } = await supabaseClient
           .from('aura_state')
           .select('*')
           .eq('id', 'global')
-          .maybeSingle();
+          .limit(1);
 
         if (error) {
-          console.error("Supabase sync down error:", error);
+          console.error('Supabase sync down error:', error);
           updateSupabaseStatus('error', error.message);
           return;
         }
 
+        const data = rows && rows.length > 0 ? rows[0] : null;
+
         if (data) {
-          console.log("Supabase State Loaded Successfully.");
+          console.log('Supabase State Loaded Successfully.');
           applyIncomingState(data);
           updateSupabaseStatus('connected');
         } else {
-          console.log("Supabase has no data. Uploading current state as global initial state...");
-          await supabaseSyncUp();
+          // ✅ Ma'lumot yo'q — mahalliy holatdan foydalaniladi
+          // Boshqa brauzer ma'lumotlarini o'chirmaslik uchun YUKLANMAYDI
+          // Keyingi o'zgarish (sessiya boshlash, smena boshlash) Supabase-ni yangilaydi
+          console.log('Supabase has no data yet. Using local state.');
+          updateSupabaseStatus('connected');
         }
       } catch (err) {
-        console.error("Supabase sync down exception:", err);
+        console.error('Supabase sync down exception:', err);
         updateSupabaseStatus('error', err.message || err);
       }
     }
@@ -5556,95 +5570,83 @@
 
     // DYNAMIC TIMER UPDATE ENGINE
     function updateTimers() {
-      const now = getNow(); // Server vaqti bilan moslashtirilgan vaqt
+      // ✅ Taymerlar har doim startTime/endTime dan hisoblanadi — hech qachon cached qiymat ishlatilmaydi
+      const now = getNow();
       let hasActive = false;
       let needGridRefresh = false;
 
       cabins.forEach(c => {
         if (c.status === "O'yinda" && c.session) {
           hasActive = true;
-          const start = new Date(c.session.startTime);
-          
+
           let statusClass = 'status-bosh';
           let dotClass = 'dot-bosh';
           let statusText = "Bo'sh";
           let timerHTML = '';
 
           if (c.session.endTime) {
-            // Limited time session
+            // Cheklangan sessiya: endTime - now = qolgan vaqt
             const end = new Date(c.session.endTime);
             const msLeft = end - now;
+            const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
 
-            if (msLeft <= 0) {
-              // Session expired
-              c.session.remainingSeconds = 0;
+            if (secondsLeft <= 0) {
               statusClass = 'status-band';
               dotClass = 'dot-band';
-              statusText = `Tugadi`;
-              timerHTML = `<div class="cabin-timer timer-overdue">00:00:00</div>`;
+              statusText = 'Tugadi';
+              timerHTML = '<div class="cabin-timer timer-overdue">00:00:00</div>';
+            } else if (secondsLeft <= 300) {
+              const h = Math.floor(secondsLeft / 3600).toString().padStart(2,'0');
+              const m = Math.floor((secondsLeft % 3600) / 60).toString().padStart(2,'0');
+              const s = (secondsLeft % 60).toString().padStart(2,'0');
+              statusClass = 'status-warning';
+              dotClass = 'dot-warning';
+              statusText = `${Math.ceil(secondsLeft / 60)} daqiqa`;
+              timerHTML = `<div class="cabin-timer timer-warning">${h}:${m}:${s}</div>`;
             } else {
-              const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
-              c.session.remainingSeconds = secondsLeft;
-              const hours = Math.floor(secondsLeft / 3600);
-              const minutes = Math.floor((secondsLeft % 3600) / 60);
-              const seconds = secondsLeft % 60;
-              const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
-              
-              if (secondsLeft <= 300 && secondsLeft > 0) {
-                statusClass = 'status-warning';
-                dotClass = 'dot-warning';
-                statusText = `${Math.ceil(secondsLeft / 60)} daqiqa`;
-                timerHTML = `<div class="cabin-timer timer-warning">${timeStr}</div>`;
-              } else {
-                statusClass = 'status-oyinda';
-                dotClass = 'dot-oyinda';
-                statusText = `O'yinda`;
-                timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
-              }
+              const h = Math.floor(secondsLeft / 3600).toString().padStart(2,'0');
+              const m = Math.floor((secondsLeft % 3600) / 60).toString().padStart(2,'0');
+              const s = (secondsLeft % 60).toString().padStart(2,'0');
+              statusClass = 'status-oyinda';
+              dotClass = 'dot-oyinda';
+              statusText = "O'yinda";
+              timerHTML = `<div class="cabin-timer timer-oyinda">${h}:${m}:${s}</div>`;
             }
           } else {
-            // Unlimited time session: Timer counts UP
-            const msElapsed = now - start;
-            const secs = Math.floor(msElapsed / 1000);
-            c.session.elapsedSeconds = secs;
-            const hours = Math.floor(secs / 3600);
-            const minutes = Math.floor((secs % 3600) / 60);
-            const seconds = secs % 60;
-            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+            // Cheksiz sessiya: now - startTime = o'tgan vaqt
+            const start = new Date(c.session.startTime);
+            const secs = Math.max(0, Math.floor((now - start) / 1000));
+            const h = Math.floor(secs / 3600).toString().padStart(2,'0');
+            const m = Math.floor((secs % 3600) / 60).toString().padStart(2,'0');
+            const s = (secs % 60).toString().padStart(2,'0');
             statusClass = 'status-oyinda';
             dotClass = 'dot-oyinda';
-            statusText = `Cheksiz`;
-            timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
+            statusText = 'Cheksiz';
+            timerHTML = `<div class="cabin-timer timer-oyinda">${h}:${m}:${s}</div>`;
           }
-          
-          // Direct DOM Update — only if we're on the cabins view
+
+          // DOM ni yangilaymiz
           const badgeEl = document.getElementById(`cabin-badge-${c.id}`);
           const dotEl = document.getElementById(`cabin-dot-${c.id}`);
           const textEl = document.getElementById(`cabin-status-text-${c.id}`);
           const timerEl = document.getElementById(`cabin-timer-container-${c.id}`);
-          
+
           if (badgeEl && dotEl && textEl && timerEl) {
             badgeEl.className = `cabin-status-badge ${statusClass}`;
             dotEl.className = `cabin-dot ${dotClass}`;
             textEl.innerText = statusText;
             timerEl.innerHTML = timerHTML;
           } else {
-            // Elements not in DOM (e.g. view switched) — flag for refresh on next render
             needGridRefresh = true;
           }
         }
       });
 
-      if (hasActive) {
-        updateActiveCabinDetailsView();
-      }
-      
-      // If grid elements are stale and we are currently on kabinalar view, re-render
+      if (hasActive) updateActiveCabinDetailsView();
+
       if (needGridRefresh) {
         const kabinalarView = document.getElementById('view-kabinalar');
-        if (kabinalarView && kabinalarView.classList.contains('active')) {
-          renderCabinsGrid();
-        }
+        if (kabinalarView && kabinalarView.classList.contains('active')) renderCabinsGrid();
       }
     }
 
@@ -5693,43 +5695,43 @@
         let timerHTML = '';
 
         if (c.status === "O'yinda" && c.session) {
+          // ✅ Timestamp dan real-time hisoblash — cached qiymat ishlatilmaydi
+          const now = getNow();
           if (c.session.endTime) {
-            const secondsLeft = c.session.remainingSeconds || 0;
-            const hours = Math.floor(secondsLeft / 3600);
-            const minutes = Math.floor((secondsLeft % 3600) / 60);
-            const seconds = secondsLeft % 60;
-            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+            const end = new Date(c.session.endTime);
+            const secondsLeft = Math.max(0, Math.floor((end - now) / 1000));
+            const h = Math.floor(secondsLeft / 3600).toString().padStart(2,'0');
+            const m = Math.floor((secondsLeft % 3600) / 60).toString().padStart(2,'0');
+            const s = (secondsLeft % 60).toString().padStart(2,'0');
+            const timeStr = `${h}:${m}:${s}`;
 
-            if (secondsLeft <= 300 && secondsLeft > 0) {
-              // 5 minutes or less
+            if (secondsLeft <= 0) {
+              statusClass = 'status-band';
+              dotClass = 'dot-band';
+              statusText = 'Tugadi';
+              timerHTML = '<div class="cabin-timer timer-overdue">00:00:00</div>';
+            } else if (secondsLeft <= 300) {
               statusClass = 'status-warning';
               dotClass = 'dot-warning';
               statusText = `${Math.ceil(secondsLeft / 60)} daqiqa`;
               timerHTML = `<div class="cabin-timer timer-warning">${timeStr}</div>`;
-            } else if (secondsLeft === 0) {
-              // Time expired
-              statusClass = 'status-band';
-              dotClass = 'dot-band';
-              statusText = `Tugadi`;
-              timerHTML = `<div class="cabin-timer timer-overdue">00:00:00</div>`;
             } else {
               statusClass = 'status-oyinda';
               dotClass = 'dot-oyinda';
-              statusText = `O'yinda`;
+              statusText = "O'yinda";
               timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
             }
           } else {
-            // Unlimited
-            const secs = c.session.elapsedSeconds || 0;
-            const hours = Math.floor(secs / 3600);
-            const minutes = Math.floor((secs % 3600) / 60);
-            const seconds = secs % 60;
-            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
-
+            // Cheksiz sessiya: now - startTime
+            const start = new Date(c.session.startTime);
+            const secs = Math.max(0, Math.floor((now - start) / 1000));
+            const h = Math.floor(secs / 3600).toString().padStart(2,'0');
+            const m = Math.floor((secs % 3600) / 60).toString().padStart(2,'0');
+            const s = (secs % 60).toString().padStart(2,'0');
             statusClass = 'status-oyinda';
             dotClass = 'dot-oyinda';
-            statusText = `Cheksiz`;
-            timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
+            statusText = 'Cheksiz';
+            timerHTML = `<div class="cabin-timer timer-oyinda">${h}:${m}:${s}</div>`;
           }
         }
 
@@ -5926,8 +5928,11 @@
       statusBadge.className = 'details-badge';
       statusDot.className = 'cabin-dot';
 
+      // ✅ Timestamp dan real-time hisoblash
+      const _now = getNow();
       if (cabin.session.endTime) {
-        const leftSecs = cabin.session.remainingSeconds || 0;
+        const _end = new Date(cabin.session.endTime);
+        const leftSecs = Math.max(0, Math.floor((_end - _now) / 1000));
         if (leftSecs <= 0) {
           statusBadge.className = 'details-badge status-band';
           statusDot.className = 'cabin-dot dot-band';
@@ -5953,22 +5958,19 @@
       timerVal.className = 'details-timer-val';
 
       if (cabin.session.endTime) {
-        const leftSecs = cabin.session.remainingSeconds || 0;
+        const _end = new Date(cabin.session.endTime);
+        const leftSecs = Math.max(0, Math.floor((_end - _now) / 1000));
         const hours = Math.floor(leftSecs / 3600);
         const minutes = Math.floor((leftSecs % 3600) / 60);
         const seconds = leftSecs % 60;
         timerVal.innerText = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
         timerLabel.innerText = "Qolgan vaqt";
-
-        if (leftSecs <= 300 && leftSecs > 0) {
-          timerVal.classList.add('timer-warning');
-        } else if (leftSecs === 0) {
-          timerVal.classList.add('timer-overdue');
-        } else {
-          timerVal.classList.add('timer-oyinda');
-        }
+        if (leftSecs <= 0) timerVal.classList.add('timer-overdue');
+        else if (leftSecs <= 300) timerVal.classList.add('timer-warning');
+        else timerVal.classList.add('timer-oyinda');
       } else {
-        const elapSecs = cabin.session.elapsedSeconds || 0;
+        const _start = new Date(cabin.session.startTime);
+        const elapSecs = Math.max(0, Math.floor((_now - _start) / 1000));
         const hours = Math.floor(elapSecs / 3600);
         const minutes = Math.floor((elapSecs % 3600) / 60);
         const seconds = elapSecs % 60;
