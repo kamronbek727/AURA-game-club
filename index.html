@@ -5715,6 +5715,7 @@
         }
 
         const isBosh = c.status === "Bo'sh";
+        const cImg = c.img || (c.type === 'PS5' ? 'rasmlar/ps5.png' : (c.id === 'VIP' ? 'rasmlar/vip.png' : 'rasmlar/ps4.png'));
 
         card.innerHTML = `
           <div class="cabin-card-header">
