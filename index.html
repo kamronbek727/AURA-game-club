@@ -5222,23 +5222,6 @@
       });
     }
 
-    async function supabaseSyncUp() {
-      if (!supabaseClient) {
-        updateSupabaseStatus('error', 'Supabase Client yuklanmagan');
-        return;
-      }
-      updateSupabaseStatus('syncing');
-      try {
-        // ✅ LocalStorage o'rniga to'g'ridan-to'g'ri in-memory global o'zgaruvchilardan foydalanamiz
-
-        // ✅ Computed fieldlarni o'chirib, faqat toza timestamp ma'lumotlarini yuklaymiz
-        // remainingSeconds va elapsedSeconds SAQLANMAYDI — ular har safar hisoblanadi
-        const cleanCabins = cabins.map(c => {
-          if (!c.session) return c;
-          const { remainingSeconds, elapsedSeconds, ...cleanSession } = c.session;
-          return { ...c, session: cleanSession };
-        });
-
     // ==========================================
     // SUPABASE RELATIONAL DATA SYNC LOGIC
     // ==========================================
