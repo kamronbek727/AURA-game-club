@@ -5098,6 +5098,12 @@
     let prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
     let logs = [];
 
+    // Unified shift & credentials state
+    let activeShift = null;
+    let shiftsHistory = [];
+    let adminPassword = 'admin';
+    let workerPassword = '1111';
+
     let activeCabinId = null;
     let selectedProductsCart = {}; // {productId: qty} for the active cabin's product selection screen
 
@@ -5223,10 +5229,7 @@
       }
       updateSupabaseStatus('syncing');
       try {
-        const activeShift = localStorage.getItem('aura_active_shift') ? JSON.parse(localStorage.getItem('aura_active_shift')) : null;
-        const shiftsHistory = localStorage.getItem('aura_shifts_history') ? JSON.parse(localStorage.getItem('aura_shifts_history')) : [];
-        const adminPassword = localStorage.getItem('aura_admin_password') || 'admin';
-        const workerPassword = localStorage.getItem('aura_worker_password') || '1111';
+        // ✅ LocalStorage o'rniga to'g'ridan-to'g'ri in-memory global o'zgaruvchilardan foydalanamiz
 
         // ✅ Computed fieldlarni o'chirib, faqat toza timestamp ma'lumotlarini yuklaymiz
         // remainingSeconds va elapsedSeconds SAQLANMAYDI — ular har safar hisoblanadi
@@ -5325,31 +5328,18 @@
         products = PRODUCTS_LIST;
       }
 
-      // 2. Sync to localStorage
-      localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
-      localStorage.setItem('aura_orders_data', JSON.stringify(orders));
-      localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
-      localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      localStorage.setItem('aura_prices_data', JSON.stringify(prices));
-      localStorage.setItem('aura_logs_data', JSON.stringify(logs));
-
+      // Sync active shift & shift history & credentials to global state
       if (state.active_shift !== undefined) {
-        if (state.active_shift) {
-          localStorage.setItem('aura_active_shift', JSON.stringify(state.active_shift));
-        } else {
-          localStorage.removeItem('aura_active_shift');
-        }
+        activeShift = state.active_shift;
       }
-
       if (state.shifts_history) {
-        localStorage.setItem('aura_shifts_history', JSON.stringify(state.shifts_history));
+        shiftsHistory = state.shifts_history;
       }
-
       if (state.admin_password) {
-        localStorage.setItem('aura_admin_password', state.admin_password);
+        adminPassword = state.admin_password;
       }
       if (state.worker_password) {
-        localStorage.setItem('aura_worker_password', state.worker_password);
+        workerPassword = state.worker_password;
       }
 
       // 3. Re-render UI views
@@ -5412,118 +5402,41 @@
 
     // Database load/save helper
     function loadDB() {
-      // Sync prices
-      const storedPrices = localStorage.getItem('aura_prices_data');
-      if (storedPrices) {
-        try {
-          prices = JSON.parse(storedPrices);
-        } catch (e) {
-          console.error("Failed to parse prices data from localStorage:", e);
-          prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
+      // 1. Aniq boshlang'ich qiymatlarni o'rnatamiz (Supabase'dan yuklanguncha fallback bo'ladi)
+      prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
+      
+      cabins = CABINS_INITIAL.map(c => {
+        let price = c.pricePerHour;
+        if (c.id === 'VIP') {
+          price = prices.VIP;
+        } else if (prices[c.type]) {
+          price = prices[c.type];
         }
-      } else {
-        prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
-        localStorage.setItem('aura_prices_data', JSON.stringify(prices));
-      }
+        return {
+          ...c,
+          pricePerHour: price,
+          status: "Bo'sh",
+          session: null
+        };
+      });
 
-      // Rebuild cabins to match all stored cabins and apply correct synced prices
-      const storedCabins = localStorage.getItem('aura_cabins_data');
-      if (storedCabins) {
-        let loadedCabins = JSON.parse(storedCabins);
-        cabins = loadedCabins.map(c => {
-          let price = c.pricePerHour;
-          if (c.id === 'VIP') {
-            price = prices.VIP;
-          } else if (prices[c.type]) {
-            price = prices[c.type];
-          }
-          c.pricePerHour = price;
-          return c;
-        });
-      } else {
-        cabins = CABINS_INITIAL.map(c => {
-          let price = c.pricePerHour;
-          if (c.id === 'VIP') {
-            price = prices.VIP;
-          } else if (prices[c.type]) {
-            price = prices[c.type];
-          }
-          return {
-            ...c,
-            pricePerHour: price,
-            status: "Bo'sh",
-            session: null
-          };
-        });
-        saveDB();
-      }
+      orders = [];
+      receiptCounter = 1;
+      logs = [];
+      activeShift = null;
+      shiftsHistory = [];
+      adminPassword = 'admin';
+      workerPassword = '1111';
 
-      const storedOrders = localStorage.getItem('aura_orders_data');
-      if (storedOrders) {
-        orders = JSON.parse(storedOrders);
-      } else {
-        orders = [];
-        saveDB();
-      }
-
-      const storedReceiptCounter = localStorage.getItem('aura_receipt_counter');
-      if (storedReceiptCounter) {
-        receiptCounter = parseInt(storedReceiptCounter, 10);
-      } else {
-        receiptCounter = 1;
-        saveDB();
-      }
-
-      // Sync products list from localStorage
-      const storedProducts = localStorage.getItem('aura_products_data');
-      if (storedProducts) {
-        const loadedProducts = JSON.parse(storedProducts);
-        
-        const defaultProds = [
-          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
-        ];
-        defaultProds.forEach(dp => {
-          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
-        });
-
-        PRODUCTS_LIST.length = 0;
-        loadedProducts.forEach(p => {
-          if (p.stock === undefined) p.stock = 20;
-          PRODUCTS_LIST.push(p);
-        });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      } else {
-        PRODUCTS_LIST.forEach(p => {
-          if (p.stock === undefined) {
-            p.stock = 20;
-          }
-        });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      }
-
-      // Sync logs
-      const storedLogs = localStorage.getItem('aura_logs_data');
-      if (storedLogs) {
-        try {
-          logs = JSON.parse(storedLogs);
-        } catch (e) {
-          console.error("Failed to parse logs data from localStorage:", e);
-          logs = [];
+      // Kalyanlar va boshqa mahsulotlar default stock qiymatlari
+      PRODUCTS_LIST.forEach(p => {
+        if (p.stock === undefined) {
+          p.stock = 20;
         }
-      } else {
-        logs = [];
-      }
+      });
     }
 
     function saveDB() {
-      localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
-      localStorage.setItem('aura_orders_data', JSON.stringify(orders));
-      localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
-      localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      localStorage.setItem('aura_prices_data', JSON.stringify(prices));
-      localStorage.setItem('aura_logs_data', JSON.stringify(logs));
       supabaseSyncUp();
     }
 
@@ -7119,87 +7032,7 @@
       });
     });
 
-    // Helper to sync admin additions/changes of cabins, prices and products
-    function syncCabinsAndPricesWithAdmin() {
-      // Initialize default passwords if not set
-      if (!localStorage.getItem('aura_admin_password')) {
-        localStorage.setItem('aura_admin_password', 'admin');
-      }
-      if (!localStorage.getItem('aura_worker_password')) {
-        localStorage.setItem('aura_worker_password', '1111');
-      }
-
-      // Sync prices from localStorage
-      const storedPrices = localStorage.getItem('aura_prices_data');
-      let prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
-      if (storedPrices) {
-        prices = JSON.parse(storedPrices);
-      } else {
-        localStorage.setItem('aura_prices_data', JSON.stringify(prices));
-      }
-
-      // Sync CABINS_INITIAL pricePerHour based on type/id
-      CABINS_INITIAL.forEach(c => {
-        if (c.id === 'VIP') {
-          c.pricePerHour = prices.VIP;
-        } else if (prices[c.type]) {
-          c.pricePerHour = prices[c.type];
-        }
-      });
-
-      // Handle custom added/modified cabins list
-      const storedCabins = localStorage.getItem('aura_cabins_data');
-      if (storedCabins) {
-        const loadedCabins = JSON.parse(storedCabins);
-        // Rebuild CABINS_INITIAL to match all stored cabins and apply correct synced prices
-        CABINS_INITIAL.length = 0;
-        loadedCabins.forEach(lc => {
-          let price = lc.pricePerHour;
-          if (lc.id === 'VIP') {
-            price = prices.VIP;
-          } else if (prices[lc.type]) {
-            price = prices[lc.type];
-          }
-          CABINS_INITIAL.push({
-            id: lc.id,
-            name: lc.name,
-            type: lc.type,
-            subtitle: lc.subtitle || (lc.id === 'VIP' ? 'VIP' : 'Standart'),
-            pricePerHour: price,
-            img: lc.img || (lc.type === 'PS5' ? 'rasmlar/ps5.png' : 'rasmlar/ps4.png')
-          });
-        });
-      }
-
-      // Sync products list from localStorage
-      const storedProducts = localStorage.getItem('aura_products_data');
-      if (storedProducts) {
-        const loadedProducts = JSON.parse(storedProducts);
-        
-        const defaultProds = [
-          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
-          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
-        ];
-        defaultProds.forEach(dp => {
-          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
-        });
-
-        PRODUCTS_LIST.length = 0;
-        loadedProducts.forEach(p => {
-          if (p.stock === undefined) p.stock = 20;
-          PRODUCTS_LIST.push(p);
-        });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      } else {
-        PRODUCTS_LIST.forEach(p => {
-          if (p.stock === undefined) {
-            p.stock = 20;
-          }
-        });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
-      }
-    }
+    // syncCabinsAndPricesWithAdmin removed. State is unified in Supabase.
 
     // Role selection and password validation variables
     let loginSelectedRole = null; // 'worker' or 'admin'
@@ -7272,7 +7105,7 @@
       }
 
       if (loginSelectedRole === 'worker') {
-        const correctWorkerPw = localStorage.getItem('aura_worker_password') || '1111';
+        const correctWorkerPw = workerPassword || '1111';
         if (password === correctWorkerPw) {
           addLog('Ishchi', 'Tizimga kirdi');
           sessionStorage.setItem('aura_logged_role', 'worker');
@@ -7292,7 +7125,7 @@
           loginErrorMessage.innerText = "Noto'g'ri parol!";
         }
       } else if (loginSelectedRole === 'admin') {
-        const correctAdminPw = localStorage.getItem('aura_admin_password') || 'admin';
+        const correctAdminPw = adminPassword || 'admin';
         if (password === correctAdminPw) {
           addLog('Admin', 'Tizimga kirdi');
           sessionStorage.setItem('aura_logged_role', 'admin');
@@ -7328,24 +7161,17 @@
         finalAction = user;
       }
 
-      const storedLogs = localStorage.getItem('aura_logs_data');
-      const logsList = storedLogs ? JSON.parse(storedLogs) : [];
-      logsList.push({
+      logs.push({
         id: Date.now(),
         timestamp: new Date().toISOString(),
         user: finalUser,
         action: finalAction
       });
-      localStorage.setItem('aura_logs_data', JSON.stringify(logsList));
-      if (typeof logs !== 'undefined') {
-        logs = logsList;
-      }
       supabaseSyncUp();
     }
 
     // APP STARTUP INITS
     window.addEventListener('DOMContentLoaded', () => {
-      syncCabinsAndPricesWithAdmin();
       loadDB();
       lucide.createIcons();
       startTimerLoop();
@@ -9794,8 +9620,9 @@
           return;
         }
 
-        localStorage.setItem('aura_admin_password', newPw);
+        adminPassword = newPw;
         addLog("Admin paroli o'zgartirildi");
+        saveDB();
         alert("Admin paroli muvaffaqiyatli o'zgartirildi.");
         formChangeAdminPw.reset();
       });
@@ -9812,8 +9639,9 @@
           return;
         }
 
-        localStorage.setItem('aura_worker_password', newPw);
+        workerPassword = newPw;
         addLog("Ishchi (Operator) paroli o'zgartirildi");
+        saveDB();
         alert("Ishchi paroli muvaffaqiyatli o'zgartirildi.");
         formChangeWorkerPw.reset();
       });
@@ -9871,24 +9699,12 @@
     var btnSaveShift = document.getElementById('btn-save-shift');
 
     function getActiveShift() {
-      const s = localStorage.getItem('aura_active_shift');
-      if (!s) return null;
-      try {
-        return JSON.parse(s);
-      } catch (e) {
-        console.error("Corrupted active shift data in localStorage. Clearing it.", e);
-        localStorage.removeItem('aura_active_shift');
-        return null;
-      }
+      return activeShift;
     }
 
     function setActiveShift(shiftObj) {
-      if (shiftObj) {
-        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
-      } else {
-        localStorage.removeItem('aura_active_shift');
-      }
-      supabaseSyncUp();
+      activeShift = shiftObj;
+      saveDB();
     }
 
     function renderShiftToggle() {
@@ -10039,8 +9855,7 @@
       if (!container) return;
       container.innerHTML = '';
 
-      const storedShifts = localStorage.getItem('aura_shifts_history');
-      const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
+      // Shifts history is read directly from global variable shiftsHistory
 
       if (shiftsHistory.length === 0) {
         container.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #9ca3af;">Hozircha smena hisobotlari yo`q.</td></tr>';
@@ -10157,17 +9972,12 @@
     var btnSaveShift = document.getElementById('btn-save-shift');
 
     function getActiveShift() {
-      const s = localStorage.getItem('aura_active_shift');
-      return s ? JSON.parse(s) : null;
+      return activeShift;
     }
 
     function setActiveShift(shiftObj) {
-      if (shiftObj) {
-        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
-      } else {
-        localStorage.removeItem('aura_active_shift');
-      }
-      supabaseSyncUp();
+      activeShift = shiftObj;
+      saveDB();
     }
 
     function renderShiftToggle() {
@@ -10465,11 +10275,8 @@
         const previousText = btnSaveShift.innerHTML;
         btnSaveShift.innerHTML = 'Saqlanmoqda...';
 
-        // Save to shifts history
-        const storedShifts = localStorage.getItem('aura_shifts_history');
-        const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
+        // Save to shifts history (global)
         shiftsHistory.push(currentCalculatedShift);
-        localStorage.setItem('aura_shifts_history', JSON.stringify(shiftsHistory));
         
         // Clear active shift and calculated data to prevent resubmission
         setActiveShift(null);
