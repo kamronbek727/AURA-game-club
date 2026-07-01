@@ -5323,27 +5323,25 @@
         // 1. Cabins
         if (cabinsRes.data && cabinsRes.data.length > 0) {
            cabins = cabinsRes.data.map(c => {
-             // CABINS_INITIAL - rasmlar va tur uchun ishonchli manba
+             // ID asosida to'g'ri tur va rasmni belgilaymiz (CABINS_INITIAL ID mos kelmasligi muammosidan qochish uchun)
+             const cabinId = String(c.id).trim();
+             
+             // Faqat 05 va VIP = PS5, qolganlari PS4
+             const isPS5 = (cabinId === '05' || cabinId === '5' || cabinId === 'VIP');
+             const isVIP = (cabinId === 'VIP');
+             
+             const cabinType     = isPS5 ? 'PS5' : 'PS4';
+             const cabinImg      = isPS5 ? 'rasmlar/ps5.png' : 'rasmlar/ps4.png';
+             const cabinSubtitle = isVIP ? 'VIP' : 'Standart';
+
+             // CABINS_INITIAL'dan nom olish (fallback)
              const initial = (typeof CABINS_INITIAL !== 'undefined')
-               ? CABINS_INITIAL.find(ci => ci.id === c.id)
+               ? CABINS_INITIAL.find(ci => String(ci.id) === cabinId || String(ci.id).replace(/^0+/,'') === cabinId.replace(/^0+/,''))
                : null;
-
-             // type: CABINS_INITIAL'dan ol (Supabase'da noto'g'ri bo'lishi mumkin)
-             const cabinType = (initial && initial.type) || c.type || 'PS4';
-
-             // img: CABINS_INITIAL'dan ol (har doim to'g'ri rasm)
-             const cabinImg = (initial && initial.img) || c.image || c.img || (
-               c.id === 'VIP' ? 'rasmlar/ps5.png' :
-               cabinType === 'PS5' ? 'rasmlar/ps5.png' :
-               'rasmlar/ps4.png'
-             );
-
-             // subtitle: VIP bo'lsa 'VIP', aks holda 'Standart'
-             const cabinSubtitle = (initial && initial.subtitle) || c.subtitle || (c.id === 'VIP' ? 'VIP' : 'Standart');
 
              return {
                id: c.id,
-               name: c.name || (initial ? initial.name : c.id),
+               name: c.name || (initial ? initial.name : `Kabina ${cabinId}`),
                type: cabinType,
                subtitle: cabinSubtitle,
                pricePerHour: c.price_per_hour,
