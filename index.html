@@ -5323,24 +5323,28 @@
         // 1. Cabins
         if (cabinsRes.data && cabinsRes.data.length > 0) {
            cabins = cabinsRes.data.map(c => {
-             // img: Supabase'dagi image maydoni bo'sh bo'lsa, tur bo'yicha default rasm
-             const cabinImg = c.image || c.img || (
-               c.id === 'VIP' ? 'rasmlar/ps5.png' :
-               c.type === 'PS5' ? 'rasmlar/ps5.png' :
-               'rasmlar/ps4.png'
-             );
-             // subtitle: VIP bo'lsa 'VIP', aks holda 'Standart'
-             const cabinSubtitle = c.subtitle || (c.id === 'VIP' ? 'VIP' : 'Standart');
-
-             // CABINS_INITIAL'dan qo'shimcha maydonlarni olish (img, subtitle, name)
+             // CABINS_INITIAL - rasmlar va tur uchun ishonchli manba
              const initial = (typeof CABINS_INITIAL !== 'undefined')
                ? CABINS_INITIAL.find(ci => ci.id === c.id)
                : null;
 
+             // type: CABINS_INITIAL'dan ol (Supabase'da noto'g'ri bo'lishi mumkin)
+             const cabinType = (initial && initial.type) || c.type || 'PS4';
+
+             // img: CABINS_INITIAL'dan ol (har doim to'g'ri rasm)
+             const cabinImg = (initial && initial.img) || c.image || c.img || (
+               c.id === 'VIP' ? 'rasmlar/ps5.png' :
+               cabinType === 'PS5' ? 'rasmlar/ps5.png' :
+               'rasmlar/ps4.png'
+             );
+
+             // subtitle: VIP bo'lsa 'VIP', aks holda 'Standart'
+             const cabinSubtitle = (initial && initial.subtitle) || c.subtitle || (c.id === 'VIP' ? 'VIP' : 'Standart');
+
              return {
                id: c.id,
                name: c.name || (initial ? initial.name : c.id),
-               type: c.type,
+               type: cabinType,
                subtitle: cabinSubtitle,
                pricePerHour: c.price_per_hour,
                status: c.status,
