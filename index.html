@@ -10266,13 +10266,27 @@
       addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
     }
 
-    function finishShift() {
+    async function finishShift() {
       const activeShift = getActiveShift();
       if (!activeShift) return;
+
+      // Ensure we have the latest orders from Supabase before calculating
+      if (typeof supabaseSyncDown === 'function') {
+        try {
+          await supabaseSyncDown();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
       const endTime = getNow().toISOString();
       const startDt = new Date(activeShift.startTime);
       
-      const shiftOrders = orders.filter(o => new Date(o.endTime) >= startDt);
+      const shiftOrders = orders.filter(o => {
+        const exactTime = o.endTime || o.created_at || o.startTime || o.dateString;
+        if (!exactTime) return false;
+        return new Date(exactTime) >= startDt;
+      });
       
       let ps4Amount = 0, ps4Hours = 0, ps4Count = 0;
       let ps5Amount = 0, ps5Hours = 0, ps5Count = 0;
@@ -10288,7 +10302,7 @@
         if (o.playAmount > 0) {
           const cabin = cabins.find(c => c.id === o.cabinId);
           let cType = cabin ? cabin.type : 'PS4';
-          let isVip = cabin && cabin.id === 'VIP';
+          let isVip = cabin && (cabin.id === 'VIP' || String(cabin.name).toUpperCase().includes('VIP') || cabin.subtitle === 'VIP');
           const durationH = o.playedDurationMinutes ? (o.playedDurationMinutes / 60) : 0;
           
           if (isVip) {
