@@ -10268,7 +10268,7 @@
     var currentCalculatedShift = null;
 
     function startShift() {
-      setActiveShift({ startTime: getNow().toISOString() });
+      setActiveShift({ id: 'SHIFT-' + Date.now(), startTime: getNow().toISOString() });
       renderShiftToggle();
       updateShiftTimer();
       addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
@@ -10374,7 +10374,7 @@
       console.log("Profit:", totalProfit);
 
       currentCalculatedShift = {
-        id: 'SHIFT-' + Date.now(),
+        id: activeShift.id || ('SHIFT-' + Date.now()),
         startTime: activeShift.startTime,
         endTime: endTime,
         ps4Amount, ps4Hours, ps4Count,
@@ -10426,13 +10426,7 @@
         activeShift = null;
         currentCalculatedShift = null;
         
-        // Baza ichidagi eski is_active=true qatorini aniq o'chirib yuboramiz
-        if (typeof supabaseClient !== 'undefined') {
-          try {
-            await supabaseClient.from('shifts').delete().eq('id', oldActiveId);
-          } catch(e) { console.error('Error deleting active shift:', e); }
-        }
-        saveDB(); // Call saveDB explicitly after activeShift is null
+        saveDB(); // Upsert will naturally update the old active shift's row to is_active: false
         
         renderShiftToggle();
         modalShiftReport.classList.remove('active');
