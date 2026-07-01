@@ -5073,6 +5073,125 @@
     let auraPendingRemoteRows = {};
     let auraRemoteFlushTimer = null;
     let auraSupabaseInitPromise = null;
+    let auraServerTimeOffset = 0;
+    let auraLastServerTimeSync = 0;
+    let shiftTickBaseAt = null;
+    let shiftTickBaseElapsed = 0;
+    let shiftTickStartTime = null;
+
+    function auraNow() {
+      return new Date(Date.now() + auraServerTimeOffset);
+    }
+
+    async function auraSyncServerTime() {
+      const localBefore = Date.now();
+      let serverMs = null;
+
+      if (supabaseClient) {
+        const { data, error } = await supabaseClient.rpc('server_now');
+        if (!error && data) {
+          serverMs = new Date(data).getTime();
+        }
+      }
+
+      if (serverMs == null) {
+        try {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/aura_store?select=key&limit=1`, {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          const dateHeader = res.headers.get('date');
+          if (dateHeader) {
+            serverMs = new Date(dateHeader).getTime();
+          }
+        } catch (e) {
+          console.warn('Server vaqti zaxira sinxronlash xatolik:', e);
+        }
+      }
+
+      if (serverMs == null) {
+        console.warn('Server vaqti sinxronlash muvaffaqiyatsiz — mahalliy vaqt ishlatiladi.');
+        return;
+      }
+
+      const localAfter = Date.now();
+      const networkDelay = (localAfter - localBefore) / 2;
+      auraServerTimeOffset = serverMs - localAfter + networkDelay;
+      auraLastServerTimeSync = Date.now();
+    }
+
+    async function auraGetServerTimeISO() {
+      await auraSyncServerTime();
+      return auraNow().toISOString();
+    }
+
+    function auraBindSessionTimer(session) {
+      if (!session) return;
+      session._tickBaseElapsed = 0;
+      session._tickBaseAt = Date.now();
+    }
+
+    function auraBindShiftTimer() {
+      const activeShift = typeof getActiveShift === 'function' ? getActiveShift() : null;
+      if (!activeShift) {
+        shiftTickBaseAt = null;
+        shiftTickBaseElapsed = 0;
+        shiftTickStartTime = null;
+        return;
+      }
+      shiftTickBaseElapsed = 0;
+      shiftTickBaseAt = Date.now();
+      shiftTickStartTime = activeShift.startTime;
+    }
+
+    function auraAnchorSessionTimers(prevCabins, options) {
+      const prev = prevCabins || [];
+      const isPageLoad = options && options.isPageLoad;
+
+      cabins.forEach(c => {
+        if (c.status !== "O'yinda" || !c.session) return;
+
+        const prevCabin = prev.find(p => p.id === c.id);
+        const startChanged = !prevCabin || !prevCabin.session || prevCabin.session.startTime !== c.session.startTime;
+        let elapsed = 0;
+
+        if (isPageLoad) {
+          elapsed = Math.max(0, Math.floor((Date.now() - new Date(c.session.startTime).getTime()) / 1000));
+        } else if (startChanged) {
+          elapsed = 0;
+        } else if (prevCabin && prevCabin.session && prevCabin.session._tickBaseAt != null) {
+          const delta = Math.floor((Date.now() - prevCabin.session._tickBaseAt) / 1000);
+          elapsed = Math.max(0, (prevCabin.session._tickBaseElapsed || 0) + delta);
+        } else {
+          elapsed = Math.max(0, Math.floor((Date.now() - new Date(c.session.startTime).getTime()) / 1000));
+        }
+
+        c.session._tickBaseElapsed = elapsed;
+        c.session._tickBaseAt = Date.now();
+      });
+    }
+
+    function auraAnchorShiftFromRemote(previousStartTime) {
+      const activeShift = typeof getActiveShift === 'function' ? getActiveShift() : null;
+      if (!activeShift) {
+        shiftTickBaseAt = null;
+        shiftTickBaseElapsed = 0;
+        shiftTickStartTime = null;
+        return;
+      }
+
+      if (previousStartTime !== activeShift.startTime) {
+        shiftTickBaseElapsed = 0;
+        shiftTickBaseAt = Date.now();
+        shiftTickStartTime = activeShift.startTime;
+      } else if (shiftTickBaseAt == null) {
+        shiftTickBaseElapsed = Math.max(0, Math.floor((Date.now() - new Date(activeShift.startTime).getTime()) / 1000));
+        shiftTickBaseAt = Date.now();
+        shiftTickStartTime = activeShift.startTime;
+      }
+    }
 
     function auraIsSyncKey(key) {
       return typeof key === 'string' && key.startsWith('aura_') && key !== 'aura_logged_role';
@@ -5127,9 +5246,23 @@
       }
     }
 
-    function auraRefreshAfterRemoteSync(changedKey) {
+    function auraRefreshAfterRemoteSync(changedKey, previousValue) {
+      const prevCabins = changedKey === 'aura_cabins_data'
+        ? JSON.parse(JSON.stringify(cabins))
+        : null;
+
+      let prevShiftStartTime = null;
+      if (changedKey === 'aura_active_shift' && previousValue) {
+        try {
+          prevShiftStartTime = JSON.parse(previousValue).startTime;
+        } catch (e) {}
+      }
+
       if (typeof loadDB === 'function') loadDB();
       if (typeof syncCabinsAndPricesWithAdmin === 'function') syncCabinsAndPricesWithAdmin();
+
+      if (prevCabins) auraAnchorSessionTimers(prevCabins);
+      if (changedKey === 'aura_active_shift') auraAnchorShiftFromRemote(prevShiftStartTime);
 
       if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
       if (typeof renderShiftToggle === 'function') renderShiftToggle();
@@ -5152,11 +5285,18 @@
       if (changedKey === 'aura_cabins_data' && typeof auraSyncViewsAfterCabinsUpdate === 'function') {
         auraSyncViewsAfterCabinsUpdate();
       }
+
+      if (changedKey === 'aura_active_shift') {
+        if (typeof renderShiftToggle === 'function') renderShiftToggle();
+        if (typeof updateShiftTimer === 'function') updateShiftTimer();
+      }
     }
 
     function auraApplyRemoteRow(key, value) {
       if (!auraIsSyncKey(key)) return;
       if (localStorage.getItem(key) === value) return;
+
+      const previousValue = localStorage.getItem(key);
 
       auraSuppressRemotePush = true;
       if (value == null || value === '') {
@@ -5166,7 +5306,7 @@
       }
       auraSuppressRemotePush = false;
 
-      auraRefreshAfterRemoteSync(key);
+      auraRefreshAfterRemoteSync(key, previousValue);
     }
 
     function auraPatchLocalStorageSync() {
@@ -5196,6 +5336,7 @@
 
       supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       auraPatchLocalStorageSync();
+      await auraSyncServerTime();
 
       const { data, error } = await supabaseClient
         .from('aura_store')
@@ -5330,6 +5471,10 @@
             price = prices[c.type];
           }
           c.pricePerHour = price;
+          if (c.session) {
+            delete c.session.elapsedSeconds;
+            delete c.session.remainingSeconds;
+          }
           return c;
         });
       } else {
@@ -5410,7 +5555,16 @@
     }
 
     function saveDB() {
-      localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
+      const cabinsForStorage = cabins.map(c => {
+        if (!c.session) return c;
+        const sessionCopy = { ...c.session };
+        delete sessionCopy.elapsedSeconds;
+        delete sessionCopy.remainingSeconds;
+        delete sessionCopy._tickBaseElapsed;
+        delete sessionCopy._tickBaseAt;
+        return { ...c, session: sessionCopy };
+      });
+      localStorage.setItem('aura_cabins_data', JSON.stringify(cabinsForStorage));
       localStorage.setItem('aura_orders_data', JSON.stringify(orders));
       localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
       localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
@@ -5434,6 +5588,47 @@
         return `${hrs} soat ${mins} daqiqa`;
       }
       return `${mins} daqiqa`;
+    }
+
+    function getSessionRemainingSeconds(session) {
+      if (!session || !session.endTime) return 0;
+      const end = new Date(session.endTime).getTime();
+      const start = session.startTime ? new Date(session.startTime).getTime() : null;
+      if (start != null) {
+        const totalSecs = Math.max(0, Math.floor((end - start) / 1000));
+        return Math.max(0, totalSecs - getSessionElapsedSeconds(session));
+      }
+      return Math.max(0, Math.floor((end - Date.now()) / 1000));
+    }
+
+    function getSessionElapsedSeconds(session) {
+      if (!session || !session.startTime) return 0;
+
+      if (session._tickBaseAt != null) {
+        const delta = Math.floor((Date.now() - session._tickBaseAt) / 1000);
+        return Math.max(0, (session._tickBaseElapsed || 0) + delta);
+      }
+
+      return Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000));
+    }
+
+    function getShiftElapsedSeconds(startTime) {
+      if (!startTime) return 0;
+
+      if (shiftTickBaseAt != null && shiftTickStartTime === startTime) {
+        const delta = Math.floor((Date.now() - shiftTickBaseAt) / 1000);
+        return Math.max(0, shiftTickBaseElapsed + delta);
+      }
+
+      return Math.max(0, Math.floor((Date.now() - new Date(startTime).getTime()) / 1000));
+    }
+
+    function formatSecondsAsHMS(totalSecs) {
+      const safeSecs = Math.max(0, Math.floor(Number(totalSecs) || 0));
+      const hours = Math.floor(safeSecs / 3600);
+      const minutes = Math.floor((safeSecs % 3600) / 60);
+      const seconds = safeSecs % 60;
+      return `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
     }
 
     // NAVIGATION VIEW MANAGER
@@ -5468,14 +5663,12 @@
 
     // DYNAMIC TIMER UPDATE ENGINE
     function updateTimers() {
-      const now = new Date();
       let hasActive = false;
       let needGridRefresh = false;
 
       cabins.forEach(c => {
         if (c.status === "O'yinda" && c.session) {
           hasActive = true;
-          const start = new Date(c.session.startTime);
           
           let statusClass = 'status-bosh';
           let dotClass = 'dot-bosh';
@@ -5483,26 +5676,17 @@
           let timerHTML = '';
 
           if (c.session.endTime) {
-            // Limited time session
-            const end = new Date(c.session.endTime);
-            const msLeft = end - now;
+            const secondsLeft = getSessionRemainingSeconds(c.session);
 
-            if (msLeft <= 0) {
-              // Session expired
-              c.session.remainingSeconds = 0;
+            if (secondsLeft <= 0) {
               statusClass = 'status-band';
               dotClass = 'dot-band';
               statusText = `Tugadi`;
               timerHTML = `<div class="cabin-timer timer-overdue">00:00:00</div>`;
             } else {
-              const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
-              c.session.remainingSeconds = secondsLeft;
-              const hours = Math.floor(secondsLeft / 3600);
-              const minutes = Math.floor((secondsLeft % 3600) / 60);
-              const seconds = secondsLeft % 60;
-              const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+              const timeStr = formatSecondsAsHMS(secondsLeft);
               
-              if (secondsLeft <= 300 && secondsLeft > 0) {
+              if (secondsLeft <= 300) {
                 statusClass = 'status-warning';
                 dotClass = 'dot-warning';
                 statusText = `${Math.ceil(secondsLeft / 60)} daqiqa`;
@@ -5515,14 +5699,8 @@
               }
             }
           } else {
-            // Unlimited time session: Timer counts UP
-            const msElapsed = now - start;
-            const secs = Math.floor(msElapsed / 1000);
-            c.session.elapsedSeconds = secs;
-            const hours = Math.floor(secs / 3600);
-            const minutes = Math.floor((secs % 3600) / 60);
-            const seconds = secs % 60;
-            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+            const secs = getSessionElapsedSeconds(c.session);
+            const timeStr = formatSecondsAsHMS(secs);
             statusClass = 'status-oyinda';
             dotClass = 'dot-oyinda';
             statusText = `Cheksiz`;
@@ -5565,6 +5743,9 @@
       globalTimerInterval = setInterval(() => {
         updateTimers();
         if (typeof updateShiftTimer === 'function') updateShiftTimer();
+        if (Date.now() - auraLastServerTimeSync > 5 * 60 * 1000) {
+          auraSyncServerTime();
+        }
       }, 1000);
     }
 
@@ -5590,7 +5771,7 @@
         } else if (currentCabinFilter === 'Yaqin') {
           // Yaqin = running cabins with least remaining time
           filtered = filtered.filter(c => c.status === "O'yinda" && c.session && c.session.endTime);
-          filtered.sort((a, b) => (a.session.remainingSeconds || 0) - (b.session.remainingSeconds || 0));
+          filtered.sort((a, b) => getSessionRemainingSeconds(a.session) - getSessionRemainingSeconds(b.session));
         }
       }
 
@@ -5606,11 +5787,8 @@
 
         if (c.status === "O'yinda" && c.session) {
           if (c.session.endTime) {
-            const secondsLeft = c.session.remainingSeconds || 0;
-            const hours = Math.floor(secondsLeft / 3600);
-            const minutes = Math.floor((secondsLeft % 3600) / 60);
-            const seconds = secondsLeft % 60;
-            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+            const secondsLeft = getSessionRemainingSeconds(c.session);
+            const timeStr = formatSecondsAsHMS(secondsLeft);
 
             if (secondsLeft <= 300 && secondsLeft > 0) {
               // 5 minutes or less
@@ -5632,11 +5810,8 @@
             }
           } else {
             // Unlimited
-            const secs = c.session.elapsedSeconds || 0;
-            const hours = Math.floor(secs / 3600);
-            const minutes = Math.floor((secs % 3600) / 60);
-            const seconds = secs % 60;
-            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+            const secs = getSessionElapsedSeconds(c.session);
+            const timeStr = formatSecondsAsHMS(secs);
 
             statusClass = 'status-oyinda';
             dotClass = 'dot-oyinda';
@@ -5771,11 +5946,12 @@
     document.getElementById('btn-mode-unlimited').addEventListener('click', () => setStartSessionMode('unlimited'));
 
     // Submit Start Session
-    document.getElementById('btn-submit-start-session').addEventListener('click', () => {
+    document.getElementById('btn-submit-start-session').addEventListener('click', async () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin) return;
 
-      const now = new Date();
+      const startTimeISO = await auraGetServerTimeISO();
+      const startMs = new Date(startTimeISO).getTime();
       let endTime = null;
       let durationMinutes = null;
 
@@ -5790,16 +5966,17 @@
         const totalMinutes = (amount / pricePerHour) * 60;
         durationMinutes = totalMinutes; // Keep precision in state
         
-        endTime = new Date(now.getTime() + totalMinutes * 60 * 1000).toISOString();
+        endTime = new Date(startMs + totalMinutes * 60 * 1000).toISOString();
       }
 
       cabin.status = "O'yinda";
       cabin.session = {
-        startTime: now.toISOString(),
+        startTime: startTimeISO,
         endTime: endTime,
         durationMinutes: durationMinutes,
         products: []
       };
+      auraBindSessionTimer(cabin.session);
 
       saveDB();
       renderCabinsGrid();
@@ -5839,7 +6016,7 @@
       statusDot.className = 'cabin-dot';
 
       if (cabin.session.endTime) {
-        const leftSecs = cabin.session.remainingSeconds || 0;
+        const leftSecs = getSessionRemainingSeconds(cabin.session);
         if (leftSecs <= 0) {
           statusBadge.className = 'details-badge status-band';
           statusDot.className = 'cabin-dot dot-band';
@@ -5865,11 +6042,8 @@
       timerVal.className = 'details-timer-val';
 
       if (cabin.session.endTime) {
-        const leftSecs = cabin.session.remainingSeconds || 0;
-        const hours = Math.floor(leftSecs / 3600);
-        const minutes = Math.floor((leftSecs % 3600) / 60);
-        const seconds = leftSecs % 60;
-        timerVal.innerText = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+        const leftSecs = getSessionRemainingSeconds(cabin.session);
+        timerVal.innerText = formatSecondsAsHMS(leftSecs);
         timerLabel.innerText = "Qolgan vaqt";
 
         if (leftSecs <= 300 && leftSecs > 0) {
@@ -5880,11 +6054,8 @@
           timerVal.classList.add('timer-oyinda');
         }
       } else {
-        const elapSecs = cabin.session.elapsedSeconds || 0;
-        const hours = Math.floor(elapSecs / 3600);
-        const minutes = Math.floor((elapSecs % 3600) / 60);
-        const seconds = elapSecs % 60;
-        timerVal.innerText = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+        const elapSecs = getSessionElapsedSeconds(cabin.session);
+        timerVal.innerText = formatSecondsAsHMS(elapSecs);
         timerLabel.innerText = "O'tilgan vaqt";
         timerVal.classList.add('timer-oyinda');
       }
@@ -5928,9 +6099,9 @@
     function calculateSessionCosts(cabin) {
       if (!cabin || !cabin.session) return { playAmount: 0, productsAmount: 0, totalAmount: 0, playedMinutes: 0 };
 
-      const now = new Date();
+      const now = auraNow();
       const start = new Date(cabin.session.startTime);
-      let playedMs = now - start;
+      let playedMs = getSessionElapsedSeconds(cabin.session) * 1000;
 
       // If limited session is finished, limit calculations to expected end time
       if (cabin.session.endTime) {
@@ -6016,11 +6187,9 @@
         cabin.session.durationMinutes = (cabin.session.durationMinutes || 0) + extraMins;
       } else {
         // Unlimited session: converting to limited
-        const now = new Date();
+        const now = auraNow();
         cabin.session.endTime = new Date(now.getTime() + extraMins * 60 * 1000).toISOString();
         cabin.session.durationMinutes = extraMins;
-        // reset elapsed seconds
-        cabin.session.elapsedSeconds = 0;
       }
       
       saveDB();
@@ -6041,9 +6210,12 @@
     document.getElementById('btn-submit-unlimited-mode').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
-      
+
+      const elapsed = getSessionElapsedSeconds(cabin.session);
       cabin.session.endTime = null;
       cabin.session.durationMinutes = null;
+      cabin.session._tickBaseElapsed = elapsed;
+      cabin.session._tickBaseAt = Date.now();
       
       saveDB();
       updateTimers();
@@ -7287,6 +7459,8 @@
       await ensureSupabaseSync();
       syncCabinsAndPricesWithAdmin();
       loadDB();
+      auraAnchorSessionTimers([], { isPageLoad: true });
+      auraBindShiftTimer();
       lucide.createIcons();
       startTimerLoop();
 
@@ -8400,8 +8574,7 @@
         if (c.status === "O'yinda") {
           if (c.session && c.session.endTime) {
             // Limited session
-            const end = new Date(c.session.endTime);
-            const diffMs = end - new Date();
+            const diffMs = getSessionRemainingSeconds(c.session) * 1000;
             if (diffMs <= 0) {
               badgeHTML = `<span class="badge badge-red">Tugadi</span>`;
             } else {
@@ -9850,9 +10023,7 @@
     function updateShiftTimer() {
       const activeShift = getActiveShift();
       if (activeShift && shiftTimerDisplay) {
-        const now = new Date();
-        const start = new Date(activeShift.startTime);
-        const diffSecs = Math.floor((now - start) / 1000);
+        const diffSecs = getShiftElapsedSeconds(activeShift.startTime);
         
         const h = Math.floor(diffSecs / 3600).toString().padStart(2, '0');
         const m = Math.floor((diffSecs % 3600) / 60).toString().padStart(2, '0');
@@ -10037,6 +10208,8 @@
       await ensureSupabaseSync();
       console.log("AuraUI: Initializing page components...");
       loadDB();
+      auraAnchorSessionTimers([], { isPageLoad: true });
+      auraBindShiftTimer();
       AuraUI.initAll();
       
       // Set current date on header
@@ -10122,9 +10295,7 @@
     function updateShiftTimer() {
       const activeShift = getActiveShift();
       if (activeShift && shiftTimerDisplay) {
-        const now = new Date();
-        const start = new Date(activeShift.startTime);
-        const diffSecs = Math.floor((now - start) / 1000);
+        const diffSecs = getShiftElapsedSeconds(activeShift.startTime);
         
         const h = Math.floor(diffSecs / 3600).toString().padStart(2, '0');
         const m = Math.floor((diffSecs % 3600) / 60).toString().padStart(2, '0');
@@ -10259,8 +10430,10 @@
 
     var currentCalculatedShift = null;
 
-    function startShift() {
-      setActiveShift({ startTime: new Date().toISOString() });
+    async function startShift() {
+      const startTime = await auraGetServerTimeISO();
+      setActiveShift({ startTime });
+      auraBindShiftTimer();
       renderShiftToggle();
       updateShiftTimer();
       addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
