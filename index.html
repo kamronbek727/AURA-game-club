@@ -2002,6 +2002,8 @@
       min-height: 100vh;
       min-height: 100dvh;
       overflow: hidden;
+      /* iOS touch scroll fix */
+      touch-action: manipulation;
     }
 
     /* Mobile wrapper - Center App on Desktop */
@@ -2123,10 +2125,15 @@
     .content-scrollable {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch; /* iOS scroll fix */
+      overscroll-behavior-y: contain;
       background: #f8fafc;
       padding: 20px;
-      padding-bottom: calc(90px + env(safe-area-inset-bottom, 0)); /* Space for bottom nav & floating elements */
+      padding-bottom: calc(100px + env(safe-area-inset-bottom, 16px));
       min-height: 0;
+      /* Prevent iOS rubber-band on parent blocking inner scroll */
+      will-change: scroll-position;
     }
 
     /* Kabinalar Section Title & Filter Dropdown */
