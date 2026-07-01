@@ -5442,7 +5442,7 @@
               startTime: s.started_at,
               endTime: s.ended_at,
               totalAmount: s.total_revenue,
-              orderCount: s.orderCount
+              orderCount: s.total_orders
            })).sort((a,b) => new Date(b.startTime) - new Date(a.startTime));
         }
 
@@ -7311,7 +7311,13 @@
     window.addEventListener('DOMContentLoaded', async () => {
       // 1. Default fallback state o'rnatamiz
       loadDB();
+      if (typeof AuraUI !== 'undefined') AuraUI.initAll();
       lucide.createIcons();
+      
+      const now = new Date();
+      const dStr = now.toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' });
+      const dateHeader = document.getElementById('current-date');
+      if (dateHeader) dateHeader.innerText = `Bugun: ${dStr}`;
 
       // 2. Bind return button click event
       const returnBtn = document.getElementById('btn-back-to-admin');
@@ -9074,7 +9080,7 @@
 
       // 1. Date filter
       if (dateVal) {
-        filtered = filtered.filter(o => o.dateString === dateVal || o.endTime.split('T')[0] === dateVal);
+        filtered = filtered.filter(o => o.dateString === dateVal || (o.endTime && o.endTime.split('T')[0] === dateVal) || (o.created_at && o.created_at.split('T')[0] === dateVal));
       }
 
       // 2. Cabin filter
@@ -10059,58 +10065,7 @@
     
     // Removed broken dynamic hook
 
-    // ── PAGE LOAD INITIALIZER ──
-    function initializePage() {
-      console.log("AuraUI: Initializing page components...");
-      loadDB();
-      AuraUI.initAll();
-      
-      // Set current date on header
-      const now = new Date();
-      const dStr = now.toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' });
-      const dateHeader = document.getElementById('current-date');
-      if (dateHeader) {
-        dateHeader.innerText = `Bugun: ${dStr}`;
-      }
-      
-      // Restore session state
-      const loggedRole = sessionStorage.getItem('aura_logged_role');
-      if (loggedRole === 'worker') {
-        const splash = document.getElementById('splash-screen');
-        if (splash) splash.style.display = 'none';
-        document.getElementById('app').style.display = 'block';
-        document.getElementById('admin-app').style.display = 'none';
-        const returnBar = document.getElementById('admin-return-bar');
-        if (returnBar) returnBar.style.display = 'none';
-        
-        if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
-        if (typeof showView === 'function') showView('view-kabinalar');
-        if (typeof renderShiftToggle === 'function') renderShiftToggle();
-        if (typeof startTimerLoop === 'function') startTimerLoop();
-      } else if (loggedRole === 'admin') {
-        const splash = document.getElementById('splash-screen');
-        if (splash) splash.style.display = 'none';
-        document.getElementById('app').style.display = 'none';
-        document.getElementById('admin-app').style.display = 'flex';
-        renderDashboard();
-      } else {
-        // Not logged in, show splash
-        const splash = document.getElementById('splash-screen');
-        if (splash) splash.style.display = 'flex';
-        document.getElementById('app').style.display = 'block';
-        document.getElementById('admin-app').style.display = 'none';
-      }
-
-      // Initialize Supabase sync and real-time subscription
-      supabaseSyncDown().then(() => syncServerTime());
-      setupSupabaseRealtime();
-    }
-
-    if (document.readyState === 'loading') {
-      window.addEventListener('DOMContentLoaded', initializePage);
-    } else {
-      initializePage();
-    }
+    // (Removed redundant initializePage and its DOMContentLoaded handler to prevent data wipe races)
   
     // ── SHIFT MANAGEMENT SYSTEM ──
     var btnShiftToggle = document.getElementById('btn-shift-toggle');
