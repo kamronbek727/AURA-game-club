@@ -5419,11 +5419,11 @@
         // 3. Orders
         if (ordersRes.data) {
            orders = ordersRes.data.map(o => ({
-              ...o.details,
+              ...(o.details || {}),
               id: o.id,
               type: o.type,
               totalAmount: o.total_amount,
-              created_at: o.created_at || o.details.created_at
+              created_at: o.created_at || (o.details ? o.details.created_at : undefined)
            }));
         }
 
@@ -5431,13 +5431,13 @@
         if (shiftsRes.data) {
            const act = shiftsRes.data.find(s => s.is_active);
            if (act) {
-              activeShift = { id: act.id, startTime: act.started_at, totalAmount: act.total_revenue, orderCount: act.total_orders, ...act };
+              activeShift = { id: act.id, startTime: act.started_at, totalAmount: act.total_revenue, orderCount: act.total_orders, ...(act.details || {}) };
            } else { 
               activeShift = null; 
            }
 
            shiftsHistory = shiftsRes.data.filter(s => !s.is_active).map(s => ({
-              ...s,
+              ...(s.details || {}),
               id: s.id,
               startTime: s.started_at,
               endTime: s.ended_at,
@@ -10401,19 +10401,30 @@
     }
 
     if (btnSaveShift) {
-      btnSaveShift.addEventListener('click', () => {
+      btnSaveShift.addEventListener('click', async () => {
         if (!currentCalculatedShift || btnSaveShift.disabled) return;
         
         btnSaveShift.disabled = true;
         const previousText = btnSaveShift.innerHTML;
         btnSaveShift.innerHTML = 'Saqlanmoqda...';
 
+        const activeShiftToClose = getActiveShift();
+        const oldActiveId = activeShiftToClose ? (activeShiftToClose.id || 'SHIFT-ACTIVE') : 'SHIFT-ACTIVE';
+
         // Save to shifts history (global)
         shiftsHistory.push(currentCalculatedShift);
         
         // Clear active shift and calculated data to prevent resubmission
-        setActiveShift(null);
+        activeShift = null;
         currentCalculatedShift = null;
+        
+        // Baza ichidagi eski is_active=true qatorini aniq o'chirib yuboramiz
+        if (typeof supabaseClient !== 'undefined') {
+          try {
+            await supabaseClient.from('shifts').delete().eq('id', oldActiveId);
+          } catch(e) { console.error('Error deleting active shift:', e); }
+        }
+        saveDB(); // Call saveDB explicitly after activeShift is null
         
         renderShiftToggle();
         modalShiftReport.classList.remove('active');
