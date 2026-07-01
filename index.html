@@ -5151,9 +5151,11 @@
         const dateHeader = res.headers.get('date');
         if (dateHeader) {
           const serverTime = new Date(dateHeader).getTime();
-          const localMid = Math.round((localBefore + localAfter) / 2);
-          serverTimeOffset = serverTime - localMid;
-          console.log('Haqiqiy server vaqti bilan moslashtirildi. Offset:', serverTimeOffset, 'ms');
+          if (!isNaN(serverTime)) {
+            const localMid = Math.round((localBefore + localAfter) / 2);
+            serverTimeOffset = serverTime - localMid;
+            console.log('Haqiqiy server vaqti bilan moslashtirildi. Offset:', serverTimeOffset, 'ms');
+          }
         } else {
           // Fallback to WorldTimeAPI
           const resApi = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC');
@@ -5243,8 +5245,14 @@
         const cleanCabins = cabins.map(c => {
           let cleanSession = null;
           if (c.session) {
-            const { remainingSeconds, elapsedSeconds, ...rest } = c.session;
-            cleanSession = rest;
+            let sessObj = c.session;
+            if (typeof c.session === 'string') {
+              try { sessObj = JSON.parse(c.session); } catch (e) { sessObj = null; }
+            }
+            if (sessObj) {
+              const { remainingSeconds, elapsedSeconds, ...rest } = sessObj;
+              cleanSession = rest;
+            }
           }
           return {
             id: c.id,
@@ -5371,14 +5379,21 @@
                ? CABINS_INITIAL.find(ci => String(ci.id) === cabinId || String(ci.id).replace(/^0+/,'') === cabinId.replace(/^0+/,''))
                : null;
 
+             const finalId = initial ? initial.id : c.id;
+              
+             let parsedSession = c.session;
+             if (typeof c.session === 'string') {
+               try { parsedSession = JSON.parse(c.session); } catch(e) { parsedSession = null; }
+             }
+
              return {
-               id: c.id,
+               id: finalId,
                name: c.name || (initial ? initial.name : `Kabina ${cabinId}`),
                type: cabinType,
                subtitle: cabinSubtitle,
                pricePerHour: c.price_per_hour,
                status: c.status,
-               session: typeof c.session === 'string' ? JSON.parse(c.session) : c.session,
+               session: parsedSession,
                img: cabinImg
              };
            });
