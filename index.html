@@ -5365,14 +5365,22 @@
            });
         }
 
-        // 2. Products
+        // 2. Products - PRODUCTS_LIST har doim to'g'ri 6 ta mahsulotdan iborat.
+        // Supabase'dan faqat stock qiymatlarini yangilaymiz (agar admin o'zgartirgan bo'lsa)
         if (productsRes.data && productsRes.data.length > 0) {
-           PRODUCTS_LIST.length = 0;
-           productsRes.data.forEach(p => PRODUCTS_LIST.push({
-               ...p, category: p.category, type: p.category
-           }));
-           if (typeof products !== 'undefined') products = PRODUCTS_LIST;
+           const allowedIds = PRODUCTS_LIST.map(p => p.id);
+           productsRes.data.forEach(dbP => {
+             // Faqat bizning ro'yxatdagi mahsulotlarni yangilaymiz
+             if (!allowedIds.includes(dbP.id)) return;
+             const localP = PRODUCTS_LIST.find(p => p.id === dbP.id);
+             if (localP) {
+               if (dbP.stock !== undefined && dbP.stock !== null) localP.stock = dbP.stock;
+               if (dbP.price) localP.price = dbP.price;
+               if (dbP.name) localP.name = dbP.name;
+             }
+           });
         }
+
 
         // 3. Orders
         if (ordersRes.data) {
@@ -7287,7 +7295,9 @@
         sessionStorage.setItem('aura_logged_role', 'admin');
       }
 
-      // 4. Supabase'dan haqiqiy ma'lumotlarni OLDIN yuklaymiz
+      // 4. Avval Supabase'ni tozalaymiz (noto'g'ri mahsulotlarni o'chiramiz)
+      await supabaseSyncUp();
+      // So'ng Supabase'dan yangilangan ma'lumotlarni yuklaymiz
       await supabaseSyncDown();
       await syncServerTime();
       setupSupabaseRealtime();
