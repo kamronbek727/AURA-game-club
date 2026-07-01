@@ -6722,54 +6722,66 @@
     });
 
     // YAKUNLASH — Finalize session, save order, reset cabin
-    document.getElementById('btn-receipt-yakunlash').addEventListener('click', async () => {
+    document.getElementById('btn-receipt-yakunlash').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (btn.disabled) return;
       if (!pendingOrderRecord || !pendingCabinId) return;
 
-      // Save order to history
-      orders.push(pendingOrderRecord);
+      btn.disabled = true;
 
-      // Reset cabin
-      const cabin = cabins.find(c => c.id === pendingCabinId);
-      if (cabin) {
-        cabin.status = "Bo'sh";
-        cabin.session = null;
-      }
+      try {
+        const currentOrder = pendingOrderRecord;
+        const currentCabinId = pendingCabinId;
+        
+        // Syncda muammo chiqmasligi uchun o'zgaruvchilarni tezda tozalaymiz
+        pendingOrderRecord = null;
+        pendingCabinId = null;
 
-      // Deduct product stock from inventory
-      if (pendingOrderRecord.products && pendingOrderRecord.products.length > 0) {
-        // Avval bazadagi eng so'nggi stock ni tortib olamiz (boshqa adminlar aralashgan bo'lsa)
-        if (supabaseClient) {
-          try {
-            const { data: dbProducts } = await supabaseClient.from('products').select('id, stock');
-            if (dbProducts) {
-              dbProducts.forEach(dbP => {
-                const localP = PRODUCTS_LIST.find(pr => pr.id === dbP.id);
-                if (localP && dbP.stock !== undefined) localP.stock = dbP.stock;
-              });
-            }
-          } catch(e) { console.error(e); }
+        // Save order to history
+        orders.push(currentOrder);
+
+        // Reset cabin
+        const cabin = cabins.find(c => c.id === currentCabinId);
+        if (cabin) {
+          cabin.status = "Bo'sh";
+          cabin.session = null;
         }
 
-        pendingOrderRecord.products.forEach(p => {
-          const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
-          if (originalProd && originalProd.category !== 'Kalyanlar') {
-            if (originalProd.stock === undefined) {
-              originalProd.stock = 20;
-            }
-            originalProd.stock = Math.max(0, originalProd.stock - p.quantity);
+        // Deduct product stock from inventory
+        if (currentOrder.products && currentOrder.products.length > 0) {
+          // Avval bazadagi eng so'nggi stock ni tortib olamiz (boshqa adminlar aralashgan bo'lsa)
+          if (supabaseClient) {
+            try {
+              const { data: dbProducts } = await supabaseClient.from('products').select('id, stock');
+              if (dbProducts) {
+                dbProducts.forEach(dbP => {
+                  const localP = PRODUCTS_LIST.find(pr => pr.id === dbP.id);
+                  if (localP && dbP.stock !== undefined) localP.stock = dbP.stock;
+                });
+              }
+            } catch(err) { console.error(err); }
           }
-        });
+
+          currentOrder.products.forEach(p => {
+            const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
+            if (originalProd && originalProd.category !== 'Kalyanlar') {
+              if (originalProd.stock === undefined) {
+                originalProd.stock = 20;
+              }
+              originalProd.stock = Math.max(0, originalProd.stock - p.quantity);
+            }
+          });
+        }
+
+        saveDB(true);
+        renderCabinsGrid();
+
+        // Close receipt modal and go back to cabins
+        document.getElementById('modal-receipt-screen').classList.remove('active');
+        showView('view-kabinalar');
+      } finally {
+        btn.disabled = false;
       }
-
-      pendingOrderRecord = null;
-      pendingCabinId = null;
-
-      saveDB(true);
-      renderCabinsGrid();
-
-      // Close receipt modal and go back to cabins
-      document.getElementById('modal-receipt-screen').classList.remove('active');
-      showView('view-kabinalar');
     });
 
     // View order history logic next
