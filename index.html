@@ -6609,8 +6609,9 @@
         id: receiptNo,
         cabinId: cabin.id,
         cabinName: cabin.name,
+        shiftId: (typeof getActiveShift === 'function' ? getActiveShift()?.id : null) || null,
         startTime: cabin.session.startTime,
-        endTime: now.toISOString(),
+        endTime: auraNow().toISOString(),
         playedDurationMinutes: calc.playedMinutes,
         playAmount: calc.playAmount,
         productAmount: calc.productsAmount,
@@ -10429,9 +10430,24 @@
 
     var currentCalculatedShift = null;
 
+    function getOrdersForActiveShift(activeShift) {
+      if (!activeShift) return [];
+      if (activeShift.id) {
+        return orders.filter(o => o.shiftId === activeShift.id);
+      }
+      const startMs = new Date(activeShift.startTime).getTime();
+      return orders.filter(o => new Date(o.endTime).getTime() >= startMs);
+    }
+
     async function startShift() {
+      currentCalculatedShift = null;
+      if (modalShiftReport) modalShiftReport.classList.remove('active');
+      if (shiftReportBody) shiftReportBody.innerHTML = '';
+      if (btnSaveShift) btnSaveShift.style.display = 'block';
+
+      const shiftId = 'SHIFT-' + Date.now();
       const startTime = await auraGetServerTimeISO();
-      setActiveShift({ startTime });
+      setActiveShift({ id: shiftId, startTime });
       auraBindShiftTimer();
       renderShiftToggle();
       updateShiftTimer();
@@ -10439,12 +10455,13 @@
     }
 
     function finishShift() {
+      loadDB();
+      currentCalculatedShift = null;
+
       const activeShift = getActiveShift();
       if (!activeShift) return;
-      const endTime = new Date().toISOString();
-      const startDt = new Date(activeShift.startTime);
-      
-      const shiftOrders = orders.filter(o => new Date(o.endTime) >= startDt);
+      const endTime = auraNow().toISOString();
+      const shiftOrders = getOrdersForActiveShift(activeShift);
       
       let ps4Amount = 0, ps4Hours = 0, ps4Count = 0;
       let ps5Amount = 0, ps5Hours = 0, ps5Count = 0;
@@ -10524,7 +10541,7 @@
       console.log("Profit:", totalProfit);
 
       currentCalculatedShift = {
-        id: 'SHIFT-' + Date.now(),
+        id: activeShift.id || ('SHIFT-' + Date.now()),
         startTime: activeShift.startTime,
         endTime: endTime,
         ps4Amount, ps4Hours, ps4Count,
@@ -10575,6 +10592,8 @@
         // Clear active shift and calculated data to prevent resubmission
         setActiveShift(null);
         currentCalculatedShift = null;
+        auraBindShiftTimer();
+        if (shiftReportBody) shiftReportBody.innerHTML = '';
         
         renderShiftToggle();
         modalShiftReport.classList.remove('active');
