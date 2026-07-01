@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>AURA PlayStation Club SRM</title>
-  <link rel="icon" type="image/png" href="rasmlar/logo.png">
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,8 +12,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Chart.js for premium graphics -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Supabase JS Library for Real-time DB Sync (with unpkg fallback) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="this.onerror=null; this.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';"></script>
+  <!-- Supabase — brauzerlar o'rtasida sinxronizatsiya -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Admin stylesheet inline -->
   <style id="admin-styles">
     /* ── Admin Panel Base & Styling (Apple Minimalistic Style) ── */
@@ -2001,10 +2000,7 @@
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      min-height: 100dvh;
       overflow: hidden;
-      /* iOS touch scroll fix */
-      touch-action: manipulation;
     }
 
     /* Mobile wrapper - Center App on Desktop */
@@ -2012,7 +2008,6 @@
       width: 100%;
       max-width: 100%;
       height: 100vh;
-      height: 100dvh;
       background: #ffffff;
       display: flex;
       flex-direction: column;
@@ -2126,15 +2121,9 @@
     .content-scrollable {
       flex: 1;
       overflow-y: auto;
-      overflow-x: hidden;
-      -webkit-overflow-scrolling: touch; /* iOS scroll fix */
-      overscroll-behavior-y: contain;
       background: #f8fafc;
       padding: 20px;
-      padding-bottom: calc(100px + env(safe-area-inset-bottom, 16px));
-      min-height: 0;
-      /* Prevent iOS rubber-band on parent blocking inner scroll */
-      will-change: scroll-position;
+      padding-bottom: calc(90px + var(--safe-bottom)); /* space for bottom navigation */
     }
 
     /* Kabinalar Section Title & Filter Dropdown */
@@ -2587,9 +2576,11 @@
       padding: 16px 20px calc(16px + var(--safe-bottom)) 20px;
       background: #ffffff;
       border-top: 1px solid #f1f5f9;
+      position: absolute;
+      bottom: 0;
+      left: 0;
       width: 100%;
       z-index: 40;
-      flex-shrink: 0;
     }
 
     .btn-finish-session {
@@ -2928,13 +2919,14 @@
 
     /* App Bottom Navigation Bar */
     .bottom-nav {
-      height: 70px;
+      height: calc(70px + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
       border-top: 1px solid #f0f2f5;
       background: #ffffff;
-      display: none; /* hidden by default for splash screen */
+      display: grid;
       grid-template-columns: repeat(2, 1fr);
       position: fixed;
-      bottom: env(safe-area-inset-bottom, 0);
+      bottom: 0;
       left: 0;
       right: 0;
       width: 100%;
@@ -3887,12 +3879,12 @@
     <!-- KABINALAR VIEW -->
     <div id="view-kabinalar" class="view">
       <!-- Header -->
-      <div class="header" style="justify-content: space-between; position: sticky; top: 0; z-index: 100;">
-        <div class="header-left" style="flex-shrink: 0;">
+      <div class="header" style="justify-content: space-between;">
+        <div class="header-left">
           <img src="rasmlar/logo.png" alt="AURA Logo" class="header-logo">
         </div>
-        <div class="header-center" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; min-width: 0; padding: 0 8px;">
-          <button id="btn-shift-toggle" class="btn-primary" style="padding: 8px 20px; font-size: 14px; border-radius: 12px; font-weight: 700; width: auto; box-shadow: 0 4px 12px rgba(0, 69, 216, 0.2); transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;">
+        <div class="header-center" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1;">
+          <button id="btn-shift-toggle" class="btn-primary" style="padding: 8px 24px; font-size: 15px; border-radius: 12px; font-weight: 700; width: auto; min-width: 180px; box-shadow: 0 4px 12px rgba(0, 69, 216, 0.2); transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px;">
             <i data-lucide="play" style="width: 16px; height: 16px;"></i>
             <span>Smenani boshlash</span>
           </button>
@@ -3900,13 +3892,8 @@
             Ish vaqti: 00:00:00
           </div>
         </div>
-        <div class="header-right" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-          <!-- Supabase status indicator - dot only on mobile -->
-          <div id="supabase-status-indicator" style="display: none !important; align-items: center; gap: 4px; cursor: pointer;" title="Ulanmagan">
-            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; flex-shrink: 0;" id="supabase-status-dot"></span>
-            <span id="supabase-status-text" style="font-size: 10px; font-weight: 600; color: #ef4444; display: none;"></span>
-          </div>
-          <div class="bell-container" style="display: none !important;">
+        <div class="header-right">
+          <div class="bell-container">
             <button class="icon-btn"><i data-lucide="bell"></i></button>
             <span class="notification-badge"></span>
           </div>
@@ -4472,12 +4459,7 @@
           <button class="sidebar-toggle-btn" id="btn-sidebar-toggle"><i data-lucide="menu"></i></button>
           <h1 class="header-title" id="page-title">Dashboard</h1>
         </div>
-        <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
-          <!-- Supabase status indicator (Admin) -->
-          <div id="supabase-status-indicator-admin" style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 20px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); cursor: pointer;" title="Ulanmagan">
-            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444;" id="supabase-status-dot-admin"></span>
-            <span id="supabase-status-text-admin">Offline</span>
-          </div>
+        <div class="header-right">
           <div class="header-date" id="current-date">Bugun: 26-Iyun, 2026</div>
         </div>
       </header>
@@ -5064,12 +5046,208 @@
     </div>
   </div>
 
-
-
   </div> <!-- /app-container -->
 
   <!-- JavaScript logic -->
   <script>
+
+    // ── SUPABASE REALTIME SYNC ──
+    const SUPABASE_URL = 'https://gcgzghrmsajwpjfcwmox.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_B-Vy2uBPRVL-KXvEMmn1Kg_yAzTr7MF';
+    const AURA_SYNC_KEYS = [
+      'aura_prices_data',
+      'aura_cabins_data',
+      'aura_orders_data',
+      'aura_receipt_counter',
+      'aura_products_data',
+      'aura_logs_data',
+      'aura_admin_password',
+      'aura_worker_password',
+      'aura_active_shift',
+      'aura_shifts_history'
+    ];
+
+    let supabaseClient = null;
+    let auraRemoteSyncEnabled = false;
+    let auraSuppressRemotePush = false;
+    let auraPendingRemoteRows = {};
+    let auraRemoteFlushTimer = null;
+    let auraSupabaseInitPromise = null;
+
+    function auraIsSyncKey(key) {
+      return typeof key === 'string' && key.startsWith('aura_') && key !== 'aura_logged_role';
+    }
+
+    async function auraFlushRemoteStore() {
+      if (!supabaseClient || auraSuppressRemotePush) return;
+
+      const rows = Object.entries(auraPendingRemoteRows).map(([key, value]) => ({
+        key,
+        value: value == null ? '' : String(value)
+      }));
+      auraPendingRemoteRows = {};
+
+      if (rows.length === 0) return;
+
+      const { error } = await supabaseClient
+        .from('aura_store')
+        .upsert(rows, { onConflict: 'key' });
+
+      if (error) {
+        console.error('Supabase sync xatolik:', error.message);
+      }
+    }
+
+    function auraQueueRemotePush(key, value) {
+      if (!auraRemoteSyncEnabled || auraSuppressRemotePush || !auraIsSyncKey(key)) return;
+      auraPendingRemoteRows[key] = value;
+      clearTimeout(auraRemoteFlushTimer);
+      auraRemoteFlushTimer = setTimeout(auraFlushRemoteStore, 250);
+    }
+
+    async function auraPushAllLocalKeys() {
+      if (!supabaseClient) return;
+
+      const rows = AURA_SYNC_KEYS
+        .map(key => {
+          const value = localStorage.getItem(key);
+          if (value == null) return null;
+          return { key, value };
+        })
+        .filter(Boolean);
+
+      if (rows.length === 0) return;
+
+      const { error } = await supabaseClient
+        .from('aura_store')
+        .upsert(rows, { onConflict: 'key' });
+
+      if (error) {
+        console.error('Supabase initial push xatolik:', error.message);
+      }
+    }
+
+    function auraRefreshAfterRemoteSync(changedKey) {
+      if (typeof loadDB === 'function') loadDB();
+      if (typeof syncCabinsAndPricesWithAdmin === 'function') syncCabinsAndPricesWithAdmin();
+
+      if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
+      if (typeof renderShiftToggle === 'function') renderShiftToggle();
+      if (typeof renderHistoryOrders === 'function') renderHistoryOrders();
+      if (typeof renderAdminShifts === 'function') renderAdminShifts();
+      if (typeof renderLogsList === 'function') renderLogsList();
+      if (typeof renderCabinsList === 'function') renderCabinsList();
+      if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
+      if (typeof renderAdminHistoryOrders === 'function') renderAdminHistoryOrders();
+
+      const adminApp = document.getElementById('admin-app');
+      if (adminApp && adminApp.style.display !== 'none' && typeof renderDashboard === 'function') {
+        renderDashboard();
+      }
+
+      if (changedKey === 'aura_products_data' && typeof renderProductsList === 'function') {
+        renderProductsList();
+      }
+
+      if (changedKey === 'aura_cabins_data' && typeof auraSyncViewsAfterCabinsUpdate === 'function') {
+        auraSyncViewsAfterCabinsUpdate();
+      }
+    }
+
+    function auraApplyRemoteRow(key, value) {
+      if (!auraIsSyncKey(key)) return;
+      if (localStorage.getItem(key) === value) return;
+
+      auraSuppressRemotePush = true;
+      if (value == null || value === '') {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, value);
+      }
+      auraSuppressRemotePush = false;
+
+      auraRefreshAfterRemoteSync(key);
+    }
+
+    function auraPatchLocalStorageSync() {
+      const originalSetItem = Storage.prototype.setItem;
+      const originalRemoveItem = Storage.prototype.removeItem;
+
+      Storage.prototype.setItem = function(key, value) {
+        originalSetItem.call(this, key, value);
+        if (this === localStorage) {
+          auraQueueRemotePush(key, value);
+        }
+      };
+
+      Storage.prototype.removeItem = function(key) {
+        originalRemoveItem.call(this, key);
+        if (this === localStorage && auraIsSyncKey(key)) {
+          auraQueueRemotePush(key, '');
+        }
+      };
+    }
+
+    async function initSupabaseSync() {
+      if (!window.supabase || !window.supabase.createClient) {
+        console.warn('Supabase kutubxonasi yuklanmadi. Faqat localStorage ishlatiladi.');
+        return;
+      }
+
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      auraPatchLocalStorageSync();
+
+      const { data, error } = await supabaseClient
+        .from('aura_store')
+        .select('key, value');
+
+      if (error) {
+        console.error('Supabase dan yuklash xatolik:', error.message);
+        console.error('SQL Editor da supabase_schema.sql kodini ishga tushiring.');
+        return;
+      }
+
+      auraSuppressRemotePush = true;
+
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          if (row.value == null || row.value === '') {
+            localStorage.removeItem(row.key);
+          } else {
+            localStorage.setItem(row.key, row.value);
+          }
+        });
+      } else {
+        await auraPushAllLocalKeys();
+      }
+
+      auraSuppressRemotePush = false;
+      auraRemoteSyncEnabled = true;
+
+      supabaseClient
+        .channel('aura-store-sync')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'aura_store' },
+          payload => {
+            if (payload.eventType === 'DELETE') {
+              auraApplyRemoteRow(payload.old.key, null);
+              return;
+            }
+            if (payload.new) {
+              auraApplyRemoteRow(payload.new.key, payload.new.value);
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    function ensureSupabaseSync() {
+      if (!auraSupabaseInitPromise) {
+        auraSupabaseInitPromise = initSupabaseSync();
+      }
+      return auraSupabaseInitPromise;
+    }
 
     // Initial Constants
     const CABINS_INITIAL = [
@@ -5084,15 +5262,13 @@
     ];
 
     const PRODUCTS_LIST = [
-      { id: 'cola033', name: 'Coca-Cola 0.33L', price: 5000,   category: 'Ichimliklar', img: 'rasmlar/cola33.png', stock: 20 },
-      { id: 'cola1',   name: 'Coca-Cola 1L',    price: 15000,  category: 'Ichimliklar', img: 'rasmlar/cola1.png',  stock: 20 },
-      { id: 'cola15',  name: 'Coca-Cola 1.5L',  price: 18000,  category: 'Ichimliklar', img: 'rasmlar/cola15.png', stock: 20 },
-      { id: 'kalyan1', name: 'Kalyan 1',         price: 80000,  adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/kalyan.png', stock: 20 },
-      { id: 'kalyan2', name: 'Kalyan 2',         price: 95000,  adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/kalyan.png', stock: 20 },
-      { id: 'kalyan3', name: 'Kalyan 3',         price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/kalyan.png', stock: 20 }
+      { id: 'cola033', name: 'Coca-Cola Classic 0.33L', price: 5000, category: 'Ichimliklar', img: 'rasmlar/cola33.png' },
+      { id: 'cola1', name: 'Coca-Cola 1L', price: 15000, category: 'Ichimliklar', img: 'rasmlar/cola1.png' },
+      { id: 'cola15', name: 'Coca-Cola 1.5L', price: 18000, category: 'Ichimliklar', img: 'rasmlar/cola15.png' },
+      { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+      { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+      { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
     ];
-    // Yuqoridagi 6 ta mahsulot har doim Supabase bilan sinxronlashadi
-
 
     // Uzbek calendar labels
     const UZ_MONTHS = [
@@ -5107,12 +5283,6 @@
     let receiptCounter = 1;
     let prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
     let logs = [];
-
-    // Unified shift & credentials state
-    let activeShift = null;
-    let shiftsHistory = [];
-    let adminPassword = 'admin';
-    let workerPassword = '1111';
 
     let activeCabinId = null;
     let selectedProductsCart = {}; // {productId: qty} for the active cabin's product selection screen
@@ -5132,499 +5302,125 @@
     // Timer Interval Reference
     let globalTimerInterval = null;
 
-    // ── SUPABASE SYNCHRONIZATION MODULE ──
-    const SUPABASE_URL = 'https://qbxyegberalhadbiknhi.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_ChEM6ocRfWTC6OalK5ecCg_jdpunIfq';
-    let supabaseClient = null;
-
-    // Server vaqti bilan qurilma vaqtining farqi (ms). Vaqt adashishini tuzatish uchun.
-    let serverTimeOffset = 0;
-
-    // Server vaqtini olish va offset hisoblash
-    async function syncServerTime() {
-      try {
-        // Vercel / GitHub Pages serveridan aniq vaqtni olish
-        const localBefore = Date.now();
-        const res = await fetch(window.location.href, { method: 'HEAD', cache: 'no-store' });
-        const localAfter = Date.now();
-        
-        const dateHeader = res.headers.get('date');
-        if (dateHeader) {
-          const serverTime = new Date(dateHeader).getTime();
-          if (!isNaN(serverTime)) {
-            const localMid = Math.round((localBefore + localAfter) / 2);
-            serverTimeOffset = serverTime - localMid;
-            console.log('Haqiqiy server vaqti bilan moslashtirildi. Offset:', serverTimeOffset, 'ms');
-          }
-        } else {
-          // Fallback to WorldTimeAPI
-          const resApi = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC');
-          const dataApi = await resApi.json();
-          if (dataApi && dataApi.utc_datetime) {
-            const apiTime = new Date(dataApi.utc_datetime).getTime();
-            const localMid = Math.round((localBefore + Date.now()) / 2);
-            serverTimeOffset = apiTime - localMid;
-            console.log('WorldTimeAPI orqali vaqt moslashtirildi. Offset:', serverTimeOffset, 'ms');
-          }
-        }
-      } catch(e) {
-        console.warn("Vaqt sinxronizatsiyasi muvaffaqiyatsiz bo'ldi, lokal vaqt ishlatilmoqda:", e);
-      }
-    }
-
-    // Haqiqiy vaqtni server bilan moslashtirib qaytaradi
-    function getNow() {
-      return new Date(Date.now() + serverTimeOffset);
-    }
-
-    if (typeof supabase !== 'undefined') {
-      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } else {
-      console.error("Supabase CDN failed to load.");
-    }
-
-    function updateSupabaseStatus(status, details = '') {
-      const statuses = [
-        {
-          dot: document.getElementById('supabase-status-dot'),
-          text: document.getElementById('supabase-status-text'),
-          container: document.getElementById('supabase-status-indicator')
-        },
-        {
-          dot: document.getElementById('supabase-status-dot-admin'),
-          text: document.getElementById('supabase-status-text-admin'),
-          container: document.getElementById('supabase-status-indicator-admin')
-        }
-      ];
-
-      statuses.forEach(elements => {
-        const { dot, text, container } = elements;
-        if (!dot || !text || !container) return;
-
-        container.onclick = () => {
-          if (details) {
-            alert("Supabase ulanish xatoligi tafsilotlari:\n" + details + "\n\nIltimos, Supabase-da jadval to'g'ri yaratilgani va RLS o'chirilganligini tekshiring.");
-          } else {
-            alert("Supabase muvaffaqiyatli ulangan va ishlamoqda. Real-time faol!");
-          }
-        };
-
-        if (status === 'connected') {
-          container.style.background = 'rgba(16, 185, 129, 0.1)';
-          container.style.color = '#10b981';
-          container.style.border = '1px solid rgba(16, 185, 129, 0.2)';
-          dot.style.background = '#10b981';
-          text.innerText = 'Online';
-          container.title = 'Real-time faol';
-        } else if (status === 'syncing') {
-          container.style.background = 'rgba(245, 158, 11, 0.1)';
-          container.style.color = '#f59e0b';
-          container.style.border = '1px solid rgba(245, 158, 11, 0.2)';
-          dot.style.background = '#f59e0b';
-          text.innerText = 'Sinxronlanmoqda...';
-          container.title = 'Sinxronlanmoqda';
-        } else {
-          container.style.background = 'rgba(239, 68, 68, 0.1)';
-          container.style.color = '#ef4444';
-          container.style.border = '1px solid rgba(239, 68, 68, 0.2)';
-          dot.style.background = '#ef4444';
-          text.innerText = 'Offline';
-          container.title = details ? `Xatolik: ${details}` : 'Ulanmagan';
-        }
-      });
-    }
-
-    // ==========================================
-    // SUPABASE RELATIONAL DATA SYNC LOGIC
-    // ==========================================
-    
-    async function supabaseSyncUp(syncProducts = false) {
-      if (!supabaseClient) return;
-      updateSupabaseStatus('syncing');
-      try {
-        const cleanCabins = cabins.map(c => {
-          let cleanSession = null;
-          if (c.session) {
-            let sessObj = c.session;
-            if (typeof c.session === 'string') {
-              try { sessObj = JSON.parse(c.session); } catch (e) { sessObj = null; }
-            }
-            if (sessObj) {
-              const { remainingSeconds, elapsedSeconds, ...rest } = sessObj;
-              cleanSession = rest;
-            }
-          }
-          return {
-            id: c.id,
-            name: c.name,
-            type: c.type,
-            price_per_hour: c.pricePerHour,
-            status: c.status,
-            session: cleanSession
-          };
-        });
-
-        // Agar mahsulotlarda o'zgarish bo'lgan bo'lsa, ularni bazaga yozamiz
-        if (syncProducts) {
-            const pProducts = PRODUCTS_LIST.map(p => ({
-                id: p.id,
-                name: p.name,
-                category: p.category,
-                price: p.price,
-                stock: p.stock !== undefined ? p.stock : 20,
-                adminProfit: p.adminProfit,
-                img: p.img
-            }));
-            try {
-                // Products upsert was moved to syncProducts block
-                const allowedIds = pProducts.map(p => p.id);
-                await supabaseClient.from('products').delete().not('id', 'in', `(${allowedIds.map(id => `'${id}'`).join(',')})`);
-                await supabaseClient.from('products').upsert(pProducts, { onConflict: 'id' });
-            } catch (e) {
-                console.error("Products sync error:", e);
-            }
-        }
-
-        const pOrders = orders.map(o => ({
-            id: o.id || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-            type: o.type || 'Sotuv',
-            total_amount: o.totalAmount || o.total || 0,
-            details: o
-        }));
-
-        let pShifts = [];
-        if (activeShift) {
-           pShifts.push({
-             id: activeShift.id || 'SHIFT-ACTIVE',
-             started_at: activeShift.startTime || new Date().toISOString(),
-             is_active: true,
-             total_revenue: activeShift.totalAmount || 0,
-             total_orders: activeShift.orderCount || 0,
-             details: activeShift
-           });
-        }
-        shiftsHistory.forEach(s => {
-           pShifts.push({
-             id: s.id || `SHIFT-${s.startTime}`,
-             started_at: s.startTime,
-             ended_at: s.endTime,
-             is_active: false,
-             total_revenue: s.totalAmount || s.totalRevenue || 0,
-             total_orders: s.orderCount || 0,
-             details: s
-           });
-        });
-
-        const pSettings = [
-          { key: 'passwords', value: { admin: adminPassword, worker: workerPassword } },
-          { key: 'prices', value: prices }
-        ];
-
-        // Kabinalar: faqat CABINS_INITIAL dagi ID'larni saqlash, ortiqchalarini o'chirish
-        const allowedCabinIds = CABINS_INITIAL.map(c => c.id);
-        await supabaseClient.from('cabins').delete().not('id', 'in', `(${allowedCabinIds.map(id => `'${id}'`).join(',')})`);
-
-        // Parallel Upserts for efficiency
-        const [cRes, oRes, sRes, setRes] = await Promise.all([
-          supabaseClient.from('cabins').upsert(cleanCabins, { onConflict: 'id' }),
-          supabaseClient.from('orders').upsert(pOrders, { onConflict: 'id' }),
-          pShifts.length > 0 ? supabaseClient.from('shifts').upsert(pShifts, { onConflict: 'id' }) : Promise.resolve({}),
-          supabaseClient.from('settings').upsert(pSettings, { onConflict: 'key' })
-        ]);
-
-        if (cRes.error || oRes.error || (sRes && sRes.error) || setRes.error) {
-            console.error('Supabase Sync Up Error Details:', cRes.error, oRes.error, sRes?.error, setRes.error);
-        }
-
-        updateSupabaseStatus('connected');
-      } catch (err) {
-        console.error('Supabase sync up exception:', err);
-        updateSupabaseStatus('error', err.message || err);
-      }
-    }
-
-    async function supabaseSyncDown() {
-      if (!supabaseClient) {
-        updateSupabaseStatus('error', 'Supabase Client yuklanmagan');
-        return;
-      }
-      updateSupabaseStatus('syncing');
-      try {
-        const [cabinsRes, productsRes, ordersRes, shiftsRes, settingsRes] = await Promise.all([
-          supabaseClient.from('cabins').select('*'),
-          supabaseClient.from('products').select('*'),
-          supabaseClient.from('orders').select('*').order('created_at', { ascending: false }),
-          supabaseClient.from('shifts').select('*'),
-          supabaseClient.from('settings').select('*')
-        ]);
-
-        if (cabinsRes.error) throw cabinsRes.error;
-
-        // 1. Cabins — faqat CABINS_INITIAL dagi kabinalarni olamiz
-        const allowedCabinIds = CABINS_INITIAL.map(c => c.id);
-        if (cabinsRes.data && cabinsRes.data.length > 0) {
-           cabins = cabinsRes.data
-             .filter(c => {
-               const cabinId = String(c.id).trim();
-               // ID ni normalize qilib CABINS_INITIAL bilan solishtirish ('1' === '01', '6' === '06')
-               return allowedCabinIds.some(aid =>
-                 String(aid) === cabinId ||
-                 String(aid).replace(/^0+/,'') === cabinId.replace(/^0+/,'')
-               );
-             })
-             .map(c => {
-             const cabinId = String(c.id).trim();
-             
-             // Faqat 05 va VIP = PS5, qolganlari PS4
-             const isPS5 = (cabinId === '05' || cabinId === '5' || cabinId === 'VIP');
-             const isVIP = (cabinId === 'VIP');
-             
-             const cabinType     = isPS5 ? 'PS5' : 'PS4';
-             const cabinImg      = isPS5 ? 'rasmlar/ps5.png' : 'rasmlar/ps4.png';
-             const cabinSubtitle = isVIP ? 'VIP' : 'Standart';
-
-             // CABINS_INITIAL'dan nom olish (fallback)
-             const initial = (typeof CABINS_INITIAL !== 'undefined')
-               ? CABINS_INITIAL.find(ci => String(ci.id) === cabinId || String(ci.id).replace(/^0+/,'') === cabinId.replace(/^0+/,''))
-               : null;
-
-             const finalId = initial ? initial.id : c.id;
-              
-             let parsedSession = c.session;
-             if (typeof c.session === 'string') {
-               try { parsedSession = JSON.parse(c.session); } catch(e) { parsedSession = null; }
-             }
-
-             return {
-               id: finalId,
-               name: c.name || (initial ? initial.name : `Kabina ${cabinId}`),
-               type: cabinType,
-               subtitle: cabinSubtitle,
-               pricePerHour: c.price_per_hour,
-               status: c.status,
-               session: parsedSession,
-               img: cabinImg
-             };
-           });
-
-           // Sort cabins using explicit predefined numbering
-           cabins.sort((a, b) => {
-               const getScore = (c) => {
-                   const s = String(c.id).trim().toUpperCase();
-                   const n = String(c.name).trim().toUpperCase();
-                   if (s.includes('VIP') || n.includes('VIP')) return 99;
-                   if (s === '01' || s === '1' || n.includes('01') || n.endsWith(' 1')) return 1;
-                   if (s === '02' || s === '2' || n.includes('02') || n.endsWith(' 2')) return 2;
-                   if (s === '03' || s === '3' || n.includes('03') || n.endsWith(' 3')) return 3;
-                   if (s === '04' || s === '4' || n.includes('04') || n.endsWith(' 4')) return 4;
-                   if (s === '05' || s === '5' || n.includes('05') || n.endsWith(' 5')) return 5;
-                   if (s === '06' || s === '6' || n.includes('06') || n.endsWith(' 6')) return 6;
-                   if (s === '07' || s === '7' || n.includes('07') || n.endsWith(' 7')) return 7;
-                   return 999;
-               };
-               return getScore(a) - getScore(b);
-           });
-        }
-
-        // 2. Products - PRODUCTS_LIST har doim to'g'ri 6 ta mahsulotdan iborat.
-        // Supabase'dan faqat stock qiymatlarini yangilaymiz (agar admin o'zgartirgan bo'lsa)
-        if (productsRes.data && productsRes.data.length > 0) {
-           const allowedIds = PRODUCTS_LIST.map(p => p.id);
-           productsRes.data.forEach(dbP => {
-             // Faqat bizning ro'yxatdagi mahsulotlarni yangilaymiz
-             if (!allowedIds.includes(dbP.id)) {
-                 PRODUCTS_LIST.push({
-                     id: dbP.id,
-                     name: dbP.name,
-                     category: dbP.category,
-                     price: dbP.price,
-                     stock: dbP.stock !== undefined ? dbP.stock : 20,
-                     adminProfit: dbP.adminProfit,
-                     img: dbP.img || 'rasmlar/logo.png'
-                 });
-                 return;
-             }
-             const localP = PRODUCTS_LIST.find(p => p.id === dbP.id);
-             if (localP) {
-               if (dbP.stock !== undefined && dbP.stock !== null) localP.stock = dbP.stock;
-               if (dbP.price !== undefined) localP.price = dbP.price;
-               if (dbP.name) localP.name = dbP.name;
-               if (dbP.adminProfit !== undefined) localP.adminProfit = dbP.adminProfit;
-               if (dbP.img) localP.img = dbP.img;
-             }
-           });
-        }
-
-
-        // 3. Orders
-        if (ordersRes.data) {
-           orders = ordersRes.data.map(o => ({
-              ...(o.details || {}),
-              id: o.id,
-              type: o.type,
-              totalAmount: o.total_amount,
-              created_at: o.created_at || (o.details ? o.details.created_at : undefined)
-           }));
-        }
-
-        // 4. Shifts
-        if (shiftsRes.data) {
-           const act = shiftsRes.data.find(s => s.is_active);
-           if (act) {
-              activeShift = { id: act.id, startTime: act.started_at, totalAmount: act.total_revenue, orderCount: act.total_orders, ...(act.details || {}) };
-           } else { 
-              activeShift = null; 
-           }
-
-           shiftsHistory = shiftsRes.data.filter(s => !s.is_active).map(s => ({
-              ...(s.details || {}),
-              id: s.id,
-              startTime: s.started_at,
-              endTime: s.ended_at,
-              totalAmount: s.total_revenue,
-              orderCount: s.total_orders
-           })).sort((a,b) => new Date(b.startTime) - new Date(a.startTime));
-        }
-
-        // 5. Settings
-        if (settingsRes.data) {
-           const pw = settingsRes.data.find(s => s.key === 'passwords');
-           if (pw && pw.value) {
-             adminPassword = pw.value.admin || 'admin';
-             workerPassword = pw.value.worker || '1111';
-           }
-           const pr = settingsRes.data.find(s => s.key === 'prices');
-           if (pr && pr.value) {
-             prices = pr.value;
-           }
-        }
-
-        console.log('Supabase Relational State Loaded Successfully.');
-        refreshAllUI();
-        updateSupabaseStatus('connected');
-      } catch (err) {
-        console.error('Supabase sync down exception:', err);
-        updateSupabaseStatus('error', err.message || err);
-      }
-    }
-
-    function refreshAllUI() {
-      try {
-        const loggedRole = sessionStorage.getItem('aura_logged_role');
-
-        // Worker-side renders
-        if (loggedRole === 'worker' || loggedRole === null) {
-          if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
-          if (typeof renderShiftToggle === 'function') renderShiftToggle();
-          if (typeof renderHistoryOrders === 'function') renderHistoryOrders();
-          if (typeof renderLogsList === 'function') renderLogsList();
-
-          const detailsView = document.getElementById('view-details');
-          if (detailsView && detailsView.classList.contains('active') && activeCabinId !== null) {
-            const cabin = cabins.find(c => c.id === activeCabinId);
-            if (!cabin || !cabin.session) {
-              showView('view-kabinalar');
-            } else {
-              if (typeof updateActiveCabinDetailsView === 'function') updateActiveCabinDetailsView();
-            }
-          }
-        }
-
-        // Admin-side renders
-        if (loggedRole === 'admin') {
-          if (typeof renderDashboard === 'function') renderDashboard();
-          if (typeof renderCabinsList === 'function') renderCabinsList();
-          if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
-          if (typeof renderAdminHistoryOrders === 'function') renderAdminHistoryOrders();
-          if (typeof renderAdminShifts === 'function') renderAdminShifts();
-          if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
-          if (typeof renderShiftToggle === 'function') renderShiftToggle();
-        }
-      } catch (err) {
-        console.error("UI refresh failed:", err);
-      }
-    }
-
-    let currentRealtimeChannel = null;
-    function setupSupabaseRealtime() {
-      if (!supabaseClient) return;
-
-      // Agar oldin kanal yaratilgan bo'lsa uni o'chiramiz
-      if (currentRealtimeChannel) {
-        supabaseClient.removeChannel(currentRealtimeChannel);
-        currentRealtimeChannel = null;
-      }
-
-      currentRealtimeChannel = supabaseClient
-        .channel('public_db_changes')
-        .on('postgres_changes', { event: '*', schema: 'public' }, payload => {
-          console.log('Supabase Realtime Triggered on table:', payload.table);
-          if (!window._syncTimeout) {
-            window._syncTimeout = setTimeout(() => {
-               supabaseSyncDown();
-               window._syncTimeout = null;
-            }, 500);
-          }
-        })
-        .subscribe((status) => {
-          console.log("Supabase Real-time Status:", status);
-          if (status === 'SUBSCRIBED') {
-            updateSupabaseStatus('connected');
-          }
-        });
-    }
-
     // Database load/save helper
     function loadDB() {
-      // 1. Aniq boshlang'ich qiymatlarni o'rnatamiz (Supabase'dan yuklanguncha fallback bo'ladi)
-      prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
-      
-      cabins = CABINS_INITIAL.map(c => {
-        let price = c.pricePerHour;
-        if (c.id === 'VIP') {
-          price = prices.VIP;
-        } else if (prices[c.type]) {
-          price = prices[c.type];
+      // Sync prices
+      const storedPrices = localStorage.getItem('aura_prices_data');
+      if (storedPrices) {
+        try {
+          prices = JSON.parse(storedPrices);
+        } catch (e) {
+          console.error("Failed to parse prices data from localStorage:", e);
+          prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
         }
-        return {
-          ...c,
-          pricePerHour: price,
-          status: "Bo'sh",
-          session: null
-        };
-      });
+      } else {
+        prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
+        localStorage.setItem('aura_prices_data', JSON.stringify(prices));
+      }
 
-      orders = [];
-      receiptCounter = 1;
-      logs = [];
-      activeShift = null;
-      shiftsHistory = [];
-      adminPassword = 'admin';
-      workerPassword = '1111';
+      // Rebuild cabins to match all stored cabins and apply correct synced prices
+      const storedCabins = localStorage.getItem('aura_cabins_data');
+      if (storedCabins) {
+        let loadedCabins = JSON.parse(storedCabins);
+        cabins = loadedCabins.map(c => {
+          let price = c.pricePerHour;
+          if (c.id === 'VIP') {
+            price = prices.VIP;
+          } else if (prices[c.type]) {
+            price = prices[c.type];
+          }
+          c.pricePerHour = price;
+          return c;
+        });
+      } else {
+        cabins = CABINS_INITIAL.map(c => {
+          let price = c.pricePerHour;
+          if (c.id === 'VIP') {
+            price = prices.VIP;
+          } else if (prices[c.type]) {
+            price = prices[c.type];
+          }
+          return {
+            ...c,
+            pricePerHour: price,
+            status: "Bo'sh",
+            session: null
+          };
+        });
+        saveDB();
+      }
 
-      // Kalyanlar va boshqa mahsulotlar default stock qiymatlari
-      PRODUCTS_LIST.forEach(p => {
-        if (p.stock === undefined) {
-          p.stock = 20;
+      const storedOrders = localStorage.getItem('aura_orders_data');
+      if (storedOrders) {
+        orders = JSON.parse(storedOrders);
+      } else {
+        orders = [];
+        saveDB();
+      }
+
+      const storedReceiptCounter = localStorage.getItem('aura_receipt_counter');
+      if (storedReceiptCounter) {
+        receiptCounter = parseInt(storedReceiptCounter, 10);
+      } else {
+        receiptCounter = 1;
+        saveDB();
+      }
+
+      // Sync products list from localStorage
+      const storedProducts = localStorage.getItem('aura_products_data');
+      if (storedProducts) {
+        const loadedProducts = JSON.parse(storedProducts);
+        
+        const defaultProds = [
+          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
+        ];
+        defaultProds.forEach(dp => {
+          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
+        });
+
+        PRODUCTS_LIST.length = 0;
+        loadedProducts.forEach(p => {
+          if (p.stock === undefined) p.stock = 20;
+          PRODUCTS_LIST.push(p);
+        });
+        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      } else {
+        PRODUCTS_LIST.forEach(p => {
+          if (p.stock === undefined) {
+            p.stock = 20;
+          }
+        });
+        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      }
+
+      // Sync logs
+      const storedLogs = localStorage.getItem('aura_logs_data');
+      if (storedLogs) {
+        try {
+          logs = JSON.parse(storedLogs);
+        } catch (e) {
+          console.error("Failed to parse logs data from localStorage:", e);
+          logs = [];
         }
-      });
+      } else {
+        logs = [];
+      }
     }
 
-    function saveDB(syncProducts = false) {
-      supabaseSyncUp(syncProducts);
+    function saveDB() {
+      localStorage.setItem('aura_cabins_data', JSON.stringify(cabins));
+      localStorage.setItem('aura_orders_data', JSON.stringify(orders));
+      localStorage.setItem('aura_receipt_counter', receiptCounter.toString());
+      localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      localStorage.setItem('aura_prices_data', JSON.stringify(prices));
+      localStorage.setItem('aura_logs_data', JSON.stringify(logs));
     }
 
     // UTILITIES
     function formatMoney(amount) {
       return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm";
-    }
-
-    function getOrderDate(o) {
-      if (o.dateString) return o.dateString;
-      if (o.endTime) return o.endTime.split('T')[0];
-      if (o.created_at) return o.created_at.split('T')[0];
-      if (o.startTime) return o.startTime.split('T')[0];
-      return '';
     }
 
     function formatTimeComponent(num) {
@@ -5672,83 +5468,95 @@
 
     // DYNAMIC TIMER UPDATE ENGINE
     function updateTimers() {
-      // ✅ Taymerlar har doim startTime/endTime dan hisoblanadi — hech qachon cached qiymat ishlatilmaydi
-      const now = getNow();
+      const now = new Date();
       let hasActive = false;
       let needGridRefresh = false;
 
       cabins.forEach(c => {
         if (c.status === "O'yinda" && c.session) {
           hasActive = true;
-
+          const start = new Date(c.session.startTime);
+          
           let statusClass = 'status-bosh';
           let dotClass = 'dot-bosh';
           let statusText = "Bo'sh";
           let timerHTML = '';
 
           if (c.session.endTime) {
-            // Cheklangan sessiya: endTime - now = qolgan vaqt
+            // Limited time session
             const end = new Date(c.session.endTime);
             const msLeft = end - now;
-            const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
 
-            if (secondsLeft <= 0) {
+            if (msLeft <= 0) {
+              // Session expired
+              c.session.remainingSeconds = 0;
               statusClass = 'status-band';
               dotClass = 'dot-band';
-              statusText = 'Tugadi';
-              timerHTML = '<div class="cabin-timer timer-overdue">00:00:00</div>';
-            } else if (secondsLeft <= 300) {
-              const h = Math.floor(secondsLeft / 3600).toString().padStart(2,'0');
-              const m = Math.floor((secondsLeft % 3600) / 60).toString().padStart(2,'0');
-              const s = (secondsLeft % 60).toString().padStart(2,'0');
-              statusClass = 'status-warning';
-              dotClass = 'dot-warning';
-              statusText = `${Math.ceil(secondsLeft / 60)} daqiqa`;
-              timerHTML = `<div class="cabin-timer timer-warning">${h}:${m}:${s}</div>`;
+              statusText = `Tugadi`;
+              timerHTML = `<div class="cabin-timer timer-overdue">00:00:00</div>`;
             } else {
-              const h = Math.floor(secondsLeft / 3600).toString().padStart(2,'0');
-              const m = Math.floor((secondsLeft % 3600) / 60).toString().padStart(2,'0');
-              const s = (secondsLeft % 60).toString().padStart(2,'0');
-              statusClass = 'status-oyinda';
-              dotClass = 'dot-oyinda';
-              statusText = "O'yinda";
-              timerHTML = `<div class="cabin-timer timer-oyinda">${h}:${m}:${s}</div>`;
+              const secondsLeft = Math.max(0, Math.floor(msLeft / 1000));
+              c.session.remainingSeconds = secondsLeft;
+              const hours = Math.floor(secondsLeft / 3600);
+              const minutes = Math.floor((secondsLeft % 3600) / 60);
+              const seconds = secondsLeft % 60;
+              const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+              
+              if (secondsLeft <= 300 && secondsLeft > 0) {
+                statusClass = 'status-warning';
+                dotClass = 'dot-warning';
+                statusText = `${Math.ceil(secondsLeft / 60)} daqiqa`;
+                timerHTML = `<div class="cabin-timer timer-warning">${timeStr}</div>`;
+              } else {
+                statusClass = 'status-oyinda';
+                dotClass = 'dot-oyinda';
+                statusText = `O'yinda`;
+                timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
+              }
             }
           } else {
-            // Cheksiz sessiya: now - startTime = o'tgan vaqt
-            const start = new Date(c.session.startTime);
-            const secs = Math.max(0, Math.floor((now - start) / 1000));
-            const h = Math.floor(secs / 3600).toString().padStart(2,'0');
-            const m = Math.floor((secs % 3600) / 60).toString().padStart(2,'0');
-            const s = (secs % 60).toString().padStart(2,'0');
+            // Unlimited time session: Timer counts UP
+            const msElapsed = now - start;
+            const secs = Math.floor(msElapsed / 1000);
+            c.session.elapsedSeconds = secs;
+            const hours = Math.floor(secs / 3600);
+            const minutes = Math.floor((secs % 3600) / 60);
+            const seconds = secs % 60;
+            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
             statusClass = 'status-oyinda';
             dotClass = 'dot-oyinda';
-            statusText = 'Cheksiz';
-            timerHTML = `<div class="cabin-timer timer-oyinda">${h}:${m}:${s}</div>`;
+            statusText = `Cheksiz`;
+            timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
           }
-
-          // DOM ni yangilaymiz
+          
+          // Direct DOM Update — only if we're on the cabins view
           const badgeEl = document.getElementById(`cabin-badge-${c.id}`);
           const dotEl = document.getElementById(`cabin-dot-${c.id}`);
           const textEl = document.getElementById(`cabin-status-text-${c.id}`);
           const timerEl = document.getElementById(`cabin-timer-container-${c.id}`);
-
+          
           if (badgeEl && dotEl && textEl && timerEl) {
             badgeEl.className = `cabin-status-badge ${statusClass}`;
             dotEl.className = `cabin-dot ${dotClass}`;
             textEl.innerText = statusText;
             timerEl.innerHTML = timerHTML;
           } else {
+            // Elements not in DOM (e.g. view switched) — flag for refresh on next render
             needGridRefresh = true;
           }
         }
       });
 
-      if (hasActive) updateActiveCabinDetailsView();
-
+      if (hasActive) {
+        updateActiveCabinDetailsView();
+      }
+      
+      // If grid elements are stale and we are currently on kabinalar view, re-render
       if (needGridRefresh) {
         const kabinalarView = document.getElementById('view-kabinalar');
-        if (kabinalarView && kabinalarView.classList.contains('active')) renderCabinsGrid();
+        if (kabinalarView && kabinalarView.classList.contains('active')) {
+          renderCabinsGrid();
+        }
       }
     }
 
@@ -5763,26 +5571,7 @@
     // VIEW 1: CABINS GRID RENDER
     function renderCabinsGrid() {
       const container = document.getElementById('cabins-container');
-      if (!container) return;
       container.innerHTML = '';
-
-      // Har doim qat'iy ravishda kabina raqami bo'yicha saralash (eng ishonchli usul)
-      cabins.sort((a, b) => {
-           const getScore = (c) => {
-               const s = String(c.id).trim().toUpperCase();
-               const n = String(c.name).trim().toUpperCase();
-               if (s.includes('VIP') || n.includes('VIP')) return 99;
-               if (s === '01' || s === '1' || n.includes('01') || n.endsWith(' 1')) return 1;
-               if (s === '02' || s === '2' || n.includes('02') || n.endsWith(' 2')) return 2;
-               if (s === '03' || s === '3' || n.includes('03') || n.endsWith(' 3')) return 3;
-               if (s === '04' || s === '4' || n.includes('04') || n.endsWith(' 4')) return 4;
-               if (s === '05' || s === '5' || n.includes('05') || n.endsWith(' 5')) return 5;
-               if (s === '06' || s === '6' || n.includes('06') || n.endsWith(' 6')) return 6;
-               if (s === '07' || s === '7' || n.includes('07') || n.endsWith(' 7')) return 7;
-               return 999;
-           };
-           return getScore(a) - getScore(b);
-      });
 
       // Get filtered cabins
       let filtered = [...cabins];
@@ -5816,48 +5605,47 @@
         let timerHTML = '';
 
         if (c.status === "O'yinda" && c.session) {
-          // ✅ Timestamp dan real-time hisoblash — cached qiymat ishlatilmaydi
-          const now = getNow();
           if (c.session.endTime) {
-            const end = new Date(c.session.endTime);
-            const secondsLeft = Math.max(0, Math.floor((end - now) / 1000));
-            const h = Math.floor(secondsLeft / 3600).toString().padStart(2,'0');
-            const m = Math.floor((secondsLeft % 3600) / 60).toString().padStart(2,'0');
-            const s = (secondsLeft % 60).toString().padStart(2,'0');
-            const timeStr = `${h}:${m}:${s}`;
+            const secondsLeft = c.session.remainingSeconds || 0;
+            const hours = Math.floor(secondsLeft / 3600);
+            const minutes = Math.floor((secondsLeft % 3600) / 60);
+            const seconds = secondsLeft % 60;
+            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
 
-            if (secondsLeft <= 0) {
-              statusClass = 'status-band';
-              dotClass = 'dot-band';
-              statusText = 'Tugadi';
-              timerHTML = '<div class="cabin-timer timer-overdue">00:00:00</div>';
-            } else if (secondsLeft <= 300) {
+            if (secondsLeft <= 300 && secondsLeft > 0) {
+              // 5 minutes or less
               statusClass = 'status-warning';
               dotClass = 'dot-warning';
               statusText = `${Math.ceil(secondsLeft / 60)} daqiqa`;
               timerHTML = `<div class="cabin-timer timer-warning">${timeStr}</div>`;
+            } else if (secondsLeft === 0) {
+              // Time expired
+              statusClass = 'status-band';
+              dotClass = 'dot-band';
+              statusText = `Tugadi`;
+              timerHTML = `<div class="cabin-timer timer-overdue">00:00:00</div>`;
             } else {
               statusClass = 'status-oyinda';
               dotClass = 'dot-oyinda';
-              statusText = "O'yinda";
+              statusText = `O'yinda`;
               timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
             }
           } else {
-            // Cheksiz sessiya: now - startTime
-            const start = new Date(c.session.startTime);
-            const secs = Math.max(0, Math.floor((now - start) / 1000));
-            const h = Math.floor(secs / 3600).toString().padStart(2,'0');
-            const m = Math.floor((secs % 3600) / 60).toString().padStart(2,'0');
-            const s = (secs % 60).toString().padStart(2,'0');
+            // Unlimited
+            const secs = c.session.elapsedSeconds || 0;
+            const hours = Math.floor(secs / 3600);
+            const minutes = Math.floor((secs % 3600) / 60);
+            const seconds = secs % 60;
+            const timeStr = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
+
             statusClass = 'status-oyinda';
             dotClass = 'dot-oyinda';
-            statusText = 'Cheksiz';
-            timerHTML = `<div class="cabin-timer timer-oyinda">${h}:${m}:${s}</div>`;
+            statusText = `Cheksiz`;
+            timerHTML = `<div class="cabin-timer timer-oyinda">${timeStr}</div>`;
           }
         }
 
         const isBosh = c.status === "Bo'sh";
-        const cImg = c.img || (c.type === 'PS5' ? 'rasmlar/ps5.png' : (c.id === 'VIP' ? 'rasmlar/vip.png' : 'rasmlar/ps4.png'));
 
         card.innerHTML = `
           <div class="cabin-card-header">
@@ -5868,7 +5656,7 @@
             </div>
           </div>
           <div class="cabin-img-container">
-            <img src="${cImg}" alt="${c.name}" class="cabin-img" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
+            <img src="${c.img}" alt="${c.name}" class="cabin-img">
           </div>
           <div class="cabin-console-name">${c.type}</div>
           <div class="cabin-console-type">${c.subtitle}</div>
@@ -5987,7 +5775,7 @@
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin) return;
 
-      const now = getNow();
+      const now = new Date();
       let endTime = null;
       let durationMinutes = null;
 
@@ -6050,11 +5838,8 @@
       statusBadge.className = 'details-badge';
       statusDot.className = 'cabin-dot';
 
-      // ✅ Timestamp dan real-time hisoblash
-      const _now = getNow();
       if (cabin.session.endTime) {
-        const _end = new Date(cabin.session.endTime);
-        const leftSecs = Math.max(0, Math.floor((_end - _now) / 1000));
+        const leftSecs = cabin.session.remainingSeconds || 0;
         if (leftSecs <= 0) {
           statusBadge.className = 'details-badge status-band';
           statusDot.className = 'cabin-dot dot-band';
@@ -6080,19 +5865,22 @@
       timerVal.className = 'details-timer-val';
 
       if (cabin.session.endTime) {
-        const _end = new Date(cabin.session.endTime);
-        const leftSecs = Math.max(0, Math.floor((_end - _now) / 1000));
+        const leftSecs = cabin.session.remainingSeconds || 0;
         const hours = Math.floor(leftSecs / 3600);
         const minutes = Math.floor((leftSecs % 3600) / 60);
         const seconds = leftSecs % 60;
         timerVal.innerText = `${formatTimeComponent(hours)}:${formatTimeComponent(minutes)}:${formatTimeComponent(seconds)}`;
         timerLabel.innerText = "Qolgan vaqt";
-        if (leftSecs <= 0) timerVal.classList.add('timer-overdue');
-        else if (leftSecs <= 300) timerVal.classList.add('timer-warning');
-        else timerVal.classList.add('timer-oyinda');
+
+        if (leftSecs <= 300 && leftSecs > 0) {
+          timerVal.classList.add('timer-warning');
+        } else if (leftSecs === 0) {
+          timerVal.classList.add('timer-overdue');
+        } else {
+          timerVal.classList.add('timer-oyinda');
+        }
       } else {
-        const _start = new Date(cabin.session.startTime);
-        const elapSecs = Math.max(0, Math.floor((_now - _start) / 1000));
+        const elapSecs = cabin.session.elapsedSeconds || 0;
         const hours = Math.floor(elapSecs / 3600);
         const minutes = Math.floor((elapSecs % 3600) / 60);
         const seconds = elapSecs % 60;
@@ -6112,11 +5900,11 @@
           row.className = 'order-item-row';
 
           const prodInfo = PRODUCTS_LIST.find(pr => pr.id === p.id);
-          const imgSrc = prodInfo ? (prodInfo.img || (p.category === 'kalyan' || p.type === 'Kalyanlar' ? 'rasmlar/kalyan.png' : 'rasmlar/logo.png')) : 'rasmlar/logo.png';
+          const imgSrc = prodInfo ? prodInfo.img : 'rasmlar/coca_cola.png';
 
           row.innerHTML = `
             <div class="order-item-left">
-              <img src="${imgSrc}" alt="${p.name}" class="order-item-img" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
+              <img src="${imgSrc}" alt="${p.name}" class="order-item-img">
               <div>
                 <div class="order-item-name">${p.name}</div>
                 <div class="order-item-qty">${p.quantity} ta</div>
@@ -6140,7 +5928,7 @@
     function calculateSessionCosts(cabin) {
       if (!cabin || !cabin.session) return { playAmount: 0, productsAmount: 0, totalAmount: 0, playedMinutes: 0 };
 
-      const now = getNow();
+      const now = new Date();
       const start = new Date(cabin.session.startTime);
       let playedMs = now - start;
 
@@ -6405,11 +6193,9 @@
           `;
         }
 
-        const pImg = p.img || (p.category === 'kalyan' || p.type === 'Kalyanlar' ? 'rasmlar/kalyan.png' : 'rasmlar/logo.png');
-
         card.innerHTML = `
           <div class="product-info-left">
-            <img src="${pImg}" alt="${p.name}" class="product-thumbnail" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
+            <img src="${p.img}" alt="${p.name}" class="product-thumbnail">
             <div class="product-details">
               <span class="product-title">${p.name}</span>
               <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 1px;">
@@ -6438,6 +6224,7 @@
             }
 
             selectedProductsCart[id] = currentQty + 1;
+            syncCartToCabinSession();
             renderProductsList();
             updateCartStatus();
           });
@@ -6452,6 +6239,7 @@
                 delete selectedProductsCart[id];
               }
             }
+            syncCartToCabinSession();
             renderProductsList();
             updateCartStatus();
           });
@@ -6508,12 +6296,10 @@
       cartTotalLabel.innerText = formatMoney(totalSum);
     }
 
-    // Save/Confirm Cart
-    document.getElementById('btn-products-confirm').addEventListener('click', () => {
+    function syncCartToCabinSession() {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
-      // Sync selectedProductsCart back to cabin session
       cabin.session.products = [];
       for (const id in selectedProductsCart) {
         const prod = PRODUCTS_LIST.find(p => p.id === id);
@@ -6529,6 +6315,43 @@
       }
 
       saveDB();
+    }
+
+    function auraSyncCartFromActiveCabin() {
+      if (activeCabinId == null) return;
+
+      const cabin = cabins.find(c => c.id === activeCabinId);
+      selectedProductsCart = {};
+      if (cabin && cabin.session && cabin.session.products) {
+        cabin.session.products.forEach(p => {
+          selectedProductsCart[p.id] = p.quantity;
+        });
+      }
+    }
+
+    function auraSyncViewsAfterCabinsUpdate() {
+      if (typeof updateTimers === 'function') updateTimers();
+
+      if (activeCabinId == null) return;
+
+      if (typeof updateActiveCabinDetailsView === 'function') {
+        updateActiveCabinDetailsView();
+      }
+
+      const productsView = document.getElementById('view-products');
+      if (productsView && productsView.classList.contains('active')) {
+        auraSyncCartFromActiveCabin();
+        if (typeof renderProductsList === 'function') renderProductsList();
+        if (typeof updateCartStatus === 'function') updateCartStatus();
+      }
+    }
+
+    // Save/Confirm Cart
+    document.getElementById('btn-products-confirm').addEventListener('click', () => {
+      const cabin = cabins.find(c => c.id === activeCabinId);
+      if (!cabin || !cabin.session) return;
+
+      syncCartToCabinSession();
       updateActiveCabinDetailsView();
       showView('view-details');
     });
@@ -6724,66 +6547,41 @@
     });
 
     // YAKUNLASH — Finalize session, save order, reset cabin
-    document.getElementById('btn-receipt-yakunlash').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      if (btn.disabled) return;
+    document.getElementById('btn-receipt-yakunlash').addEventListener('click', () => {
       if (!pendingOrderRecord || !pendingCabinId) return;
 
-      btn.disabled = true;
+      // Save order to history
+      orders.push(pendingOrderRecord);
 
-      try {
-        const currentOrder = pendingOrderRecord;
-        const currentCabinId = pendingCabinId;
-        
-        // Syncda muammo chiqmasligi uchun o'zgaruvchilarni tezda tozalaymiz
-        pendingOrderRecord = null;
-        pendingCabinId = null;
-
-        // Save order to history
-        orders.push(currentOrder);
-
-        // Reset cabin
-        const cabin = cabins.find(c => c.id === currentCabinId);
-        if (cabin) {
-          cabin.status = "Bo'sh";
-          cabin.session = null;
-        }
-
-        // Deduct product stock from inventory
-        if (currentOrder.products && currentOrder.products.length > 0) {
-          // Avval bazadagi eng so'nggi stock ni tortib olamiz (boshqa adminlar aralashgan bo'lsa)
-          if (supabaseClient) {
-            try {
-              const { data: dbProducts } = await supabaseClient.from('products').select('id, stock');
-              if (dbProducts) {
-                dbProducts.forEach(dbP => {
-                  const localP = PRODUCTS_LIST.find(pr => pr.id === dbP.id);
-                  if (localP && dbP.stock !== undefined) localP.stock = dbP.stock;
-                });
-              }
-            } catch(err) { console.error(err); }
-          }
-
-          currentOrder.products.forEach(p => {
-            const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
-            if (originalProd && originalProd.category !== 'Kalyanlar') {
-              if (originalProd.stock === undefined) {
-                originalProd.stock = 20;
-              }
-              originalProd.stock = Math.max(0, originalProd.stock - p.quantity);
-            }
-          });
-        }
-
-        saveDB(true);
-        renderCabinsGrid();
-
-        // Close receipt modal and go back to cabins
-        document.getElementById('modal-receipt-screen').classList.remove('active');
-        showView('view-kabinalar');
-      } finally {
-        btn.disabled = false;
+      // Reset cabin
+      const cabin = cabins.find(c => c.id === pendingCabinId);
+      if (cabin) {
+        cabin.status = "Bo'sh";
+        cabin.session = null;
       }
+
+      // Deduct product stock from inventory
+      if (pendingOrderRecord.products && pendingOrderRecord.products.length > 0) {
+        pendingOrderRecord.products.forEach(p => {
+          const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
+          if (originalProd && originalProd.category !== 'Kalyanlar') {
+            if (originalProd.stock === undefined) {
+              originalProd.stock = 20;
+            }
+            originalProd.stock = Math.max(0, originalProd.stock - p.quantity);
+          }
+        });
+      }
+
+      pendingOrderRecord = null;
+      pendingCabinId = null;
+
+      saveDB();
+      renderCabinsGrid();
+
+      // Close receipt modal and go back to cabins
+      document.getElementById('modal-receipt-screen').classList.remove('active');
+      showView('view-kabinalar');
     });
 
     // View order history logic next
@@ -7261,7 +7059,87 @@
       });
     });
 
-    // syncCabinsAndPricesWithAdmin removed. State is unified in Supabase.
+    // Helper to sync admin additions/changes of cabins, prices and products
+    function syncCabinsAndPricesWithAdmin() {
+      // Initialize default passwords if not set
+      if (!localStorage.getItem('aura_admin_password')) {
+        localStorage.setItem('aura_admin_password', 'admin');
+      }
+      if (!localStorage.getItem('aura_worker_password')) {
+        localStorage.setItem('aura_worker_password', '1111');
+      }
+
+      // Sync prices from localStorage
+      const storedPrices = localStorage.getItem('aura_prices_data');
+      let prices = { PS4: 20000, PS5: 25000, VIP: 30000 };
+      if (storedPrices) {
+        prices = JSON.parse(storedPrices);
+      } else {
+        localStorage.setItem('aura_prices_data', JSON.stringify(prices));
+      }
+
+      // Sync CABINS_INITIAL pricePerHour based on type/id
+      CABINS_INITIAL.forEach(c => {
+        if (c.id === 'VIP') {
+          c.pricePerHour = prices.VIP;
+        } else if (prices[c.type]) {
+          c.pricePerHour = prices[c.type];
+        }
+      });
+
+      // Handle custom added/modified cabins list
+      const storedCabins = localStorage.getItem('aura_cabins_data');
+      if (storedCabins) {
+        const loadedCabins = JSON.parse(storedCabins);
+        // Rebuild CABINS_INITIAL to match all stored cabins and apply correct synced prices
+        CABINS_INITIAL.length = 0;
+        loadedCabins.forEach(lc => {
+          let price = lc.pricePerHour;
+          if (lc.id === 'VIP') {
+            price = prices.VIP;
+          } else if (prices[lc.type]) {
+            price = prices[lc.type];
+          }
+          CABINS_INITIAL.push({
+            id: lc.id,
+            name: lc.name,
+            type: lc.type,
+            subtitle: lc.subtitle || (lc.id === 'VIP' ? 'VIP' : 'Standart'),
+            pricePerHour: price,
+            img: lc.img || (lc.type === 'PS5' ? 'rasmlar/ps5.png' : 'rasmlar/ps4.png')
+          });
+        });
+      }
+
+      // Sync products list from localStorage
+      const storedProducts = localStorage.getItem('aura_products_data');
+      if (storedProducts) {
+        const loadedProducts = JSON.parse(storedProducts);
+        
+        const defaultProds = [
+          { id: 'kalyan1', name: 'Kalyan 1', price: 80000, adminProfit: 25000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan2', name: 'Kalyan 2', price: 95000, adminProfit: 40000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 },
+          { id: 'kalyan3', name: 'Kalyan 3', price: 110000, adminProfit: 45000, category: 'Kalyanlar', img: 'rasmlar/logo.png', stock: 20 }
+        ];
+        defaultProds.forEach(dp => {
+          if (!loadedProducts.find(lp => lp.id === dp.id)) loadedProducts.push(dp);
+        });
+
+        PRODUCTS_LIST.length = 0;
+        loadedProducts.forEach(p => {
+          if (p.stock === undefined) p.stock = 20;
+          PRODUCTS_LIST.push(p);
+        });
+        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      } else {
+        PRODUCTS_LIST.forEach(p => {
+          if (p.stock === undefined) {
+            p.stock = 20;
+          }
+        });
+        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+      }
+    }
 
     // Role selection and password validation variables
     let loginSelectedRole = null; // 'worker' or 'admin'
@@ -7334,7 +7212,7 @@
       }
 
       if (loginSelectedRole === 'worker') {
-        const correctWorkerPw = workerPassword || '1111';
+        const correctWorkerPw = localStorage.getItem('aura_worker_password') || '1111';
         if (password === correctWorkerPw) {
           addLog('Ishchi', 'Tizimga kirdi');
           sessionStorage.setItem('aura_logged_role', 'worker');
@@ -7354,7 +7232,7 @@
           loginErrorMessage.innerText = "Noto'g'ri parol!";
         }
       } else if (loginSelectedRole === 'admin') {
-        const correctAdminPw = adminPassword || 'admin';
+        const correctAdminPw = localStorage.getItem('aura_admin_password') || 'admin';
         if (password === correctAdminPw) {
           addLog('Admin', 'Tizimga kirdi');
           sessionStorage.setItem('aura_logged_role', 'admin');
@@ -7390,80 +7268,84 @@
         finalAction = user;
       }
 
-      logs.push({
+      const storedLogs = localStorage.getItem('aura_logs_data');
+      const logsList = storedLogs ? JSON.parse(storedLogs) : [];
+      logsList.push({
         id: Date.now(),
         timestamp: new Date().toISOString(),
         user: finalUser,
         action: finalAction
       });
-      supabaseSyncUp();
+      localStorage.setItem('aura_logs_data', JSON.stringify(logsList));
+      if (typeof logs !== 'undefined') {
+        logs = logsList;
+      }
     }
 
-    // APP STARTUP INITS — bitta martalik, Supabase yuklanishini kutadi
+    // APP STARTUP INITS
     window.addEventListener('DOMContentLoaded', async () => {
-      // 1. Default fallback state o'rnatamiz
+      await ensureSupabaseSync();
+      syncCabinsAndPricesWithAdmin();
       loadDB();
-      if (typeof AuraUI !== 'undefined') AuraUI.initAll();
       lucide.createIcons();
-      
-      const now = new Date();
-      const dStr = now.toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' });
-      const dateHeader = document.getElementById('current-date');
-      if (dateHeader) dateHeader.innerText = `Bugun: ${dStr}`;
+      startTimerLoop();
 
-      // 2. Bind return button click event
+      // Bind return button click event
       const returnBtn = document.getElementById('btn-back-to-admin');
       if (returnBtn) {
         returnBtn.addEventListener('click', () => {
           document.getElementById('app').style.display = 'none';
           document.getElementById('admin-app').style.display = 'flex';
-          if (typeof renderDashboard === 'function') renderDashboard();
+          if (typeof renderDashboard === 'function') {
+            renderDashboard();
+          }
         });
       }
 
-      // 3. URL param orqali admin kirishi
+      // Check role parameters
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('role') === 'admin') {
+      const isParamAdmin = urlParams.get('role') === 'admin';
+      
+      if (isParamAdmin) {
         sessionStorage.setItem('aura_logged_role', 'admin');
       }
 
-      // 4. BIRINCHI Supabase'dan haqiqiy ma'lumotlarni yuklaymiz (kabina sessiyalari, buyurtmalar...)
-      await supabaseSyncDown();
-      await syncServerTime();
-
-      // (Supabase cleanup is handled safely during saveDB / supabaseSyncUp, not on page load)
-      setupSupabaseRealtime();
-
-      // 5. Ma'lumot yuklangandan KEYIN UI ko'rsatamiz
       const loggedRole = sessionStorage.getItem('aura_logged_role');
       if (loggedRole === 'admin') {
+        // Skip splash screen
         const splash = document.getElementById('splash-screen');
         if (splash) splash.style.display = 'none';
+        
+        // Hide Operator, show Admin
         document.getElementById('app').style.display = 'none';
         document.getElementById('admin-app').style.display = 'flex';
-        if (typeof renderDashboard === 'function') renderDashboard();
-        if (typeof renderCabinsList === 'function') renderCabinsList();
-        if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
-        if (typeof renderAdminHistoryOrders === 'function') renderAdminHistoryOrders();
-        if (typeof renderAdminShifts === 'function') renderAdminShifts();
+        
+        // Render Admin panel
+        if (typeof renderDashboard === 'function') {
+          renderDashboard();
+        }
       } else if (loggedRole === 'worker') {
+        // Skip splash screen
         const splash = document.getElementById('splash-screen');
         if (splash) splash.style.display = 'none';
+        
+        // Show Operator panel
         document.getElementById('app').style.display = 'block';
         document.getElementById('admin-app').style.display = 'none';
+        
         const returnBar = document.getElementById('admin-return-bar');
         if (returnBar) returnBar.style.display = 'none';
+        
+        // Initial render
         renderCabinsGrid();
         showView('view-kabinalar');
-        if (typeof renderShiftToggle === 'function') renderShiftToggle();
       } else {
+        // Show splash screen, hide admin-app
         document.getElementById('app').style.display = 'block';
         document.getElementById('admin-app').style.display = 'none';
         const returnBar = document.getElementById('admin-return-bar');
         if (returnBar) returnBar.style.display = 'none';
       }
-
-      startTimerLoop();
     });
 
     // Link local variables to admin names
@@ -8433,7 +8315,7 @@
         showView('view-kabinalar');
       }
       if (typeof renderShiftToggle === 'function') renderShiftToggle();
-      if (typeof startTimerLoop === 'function') renderTimerLoop();
+      if (typeof startTimerLoop === 'function') startTimerLoop();
       
       // Close sidebar on mobile if active
       closeSidebar();
@@ -8441,8 +8323,7 @@
 
     // Module Initializer router
     function initViewModule(viewId) {
-      // loadDB() CHAQIRILMAYDI — ma'lumotlar Supabase'dan bir marta yuklanadi va Realtime orqali yangilanadi.
-      // loadDB() chaqirilsa barcha Supabase ma'lumotlari bo'shatiladi!
+      loadDB();
       switch (viewId) {
         case 'dashboard':
           renderDashboard();
@@ -8483,7 +8364,7 @@
       const todayStr = now.toISOString().split('T')[0];
 
       // Calculate Bugungi buyurtmalar (Today's orders)
-      const todayOrders = orders.filter(o => getOrderDate(o) === todayStr);
+      const todayOrders = orders.filter(o => o.endTime.split('T')[0] === todayStr);
       const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.adminTotalAmount !== undefined ? o.adminTotalAmount : o.totalAmount), 0);
       const todayPlaySum = todayOrders.reduce((sum, o) => sum + o.playAmount, 0);
       const todayProductSum = todayOrders.reduce((sum, o) => sum + (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount), 0);
@@ -8588,7 +8469,7 @@
                 name: p.name,
                 qty: 0,
                 revenue: 0,
-                img: originalProd ? (originalProd.img || 'rasmlar/cola33.png') : 'rasmlar/cola33.png'
+                img: originalProd ? originalProd.img : 'rasmlar/cola33.png'
               };
             }
             productSalesMap[p.id].qty += p.quantity;
@@ -8684,7 +8565,7 @@
         labels.push(dayLabel);
 
         // Sum orders
-        const dayOrders = ordersData.filter(o => getOrderDate(o) === dateStr);
+        const dayOrders = ordersData.filter(o => o.endTime.split('T')[0] === dateStr);
         const playSum = dayOrders.reduce((sum, o) => sum + o.playAmount, 0);
         const prodSum = dayOrders.reduce((sum, o) => sum + o.productAmount, 0);
         
@@ -8738,7 +8619,6 @@
       cabins.forEach(c => {
         const card = document.createElement('div');
         card.className = 'admin-cabin-card';
-        const cImg = c.img || (c.type === 'PS5' ? 'rasmlar/ps5.png' : (c.id === 'VIP' ? 'rasmlar/vip.png' : 'rasmlar/ps4.png'));
 
         let statusHTML = '';
         if (c.status === "O'yinda") {
@@ -8753,7 +8633,7 @@
             ${statusHTML}
           </div>
           <div class="admin-cabin-img-wrap">
-            <img src="${cImg}" alt="${c.name}" class="admin-cabin-img" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
+            <img src="${c.img}" alt="${c.name}" class="admin-cabin-img">
           </div>
           <div class="admin-cabin-type">${c.type}</div>
           <div class="admin-cabin-price">${formatMoney(c.pricePerHour)} / soat</div>
@@ -8892,7 +8772,6 @@
       products.forEach(p => {
         const card = document.createElement('div');
         card.className = 'admin-product-card';
-        const pImg = p.img || (p.category === 'kalyan' || p.type === 'Kalyanlar' ? 'rasmlar/kalyan.png' : 'rasmlar/logo.png');
 
         const stockVal = p.stock !== undefined ? p.stock : 20;
         let badgeHTML = '';
@@ -8908,7 +8787,7 @@
 
         card.innerHTML = `
           <div class="admin-product-img-wrap">
-            <img src="${pImg}" alt="${p.name}" class="admin-product-img" onerror="this.onerror=null; this.src='rasmlar/logo.png';">
+            <img src="${p.img}" alt="${p.name}" class="admin-product-img">
           </div>
           <div class="admin-product-name">${p.name}</div>
           <div class="admin-product-category">${p.category}</div>
@@ -9061,7 +8940,7 @@
           }
         }
 
-        saveDB(true);
+        saveDB();
         closeAllModals();
         renderAdminProductsList();
       });
@@ -9076,13 +8955,8 @@
         if (idx !== -1) {
           PRODUCTS_LIST.splice(idx, 1);
         }
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-           supabaseClient.from('products').delete().eq('id', productId).then(() => {
-               console.log("Deleted product from supabase");
-           });
-        }
         addLog(`Mahsulot o'chirildi: ${p.name}`);
-        saveDB(true);
+        saveDB();
         renderAdminProductsList();
       }
     }
@@ -9166,7 +9040,7 @@
 
       // 1. Date filter
       if (dateVal) {
-        filtered = filtered.filter(o => getOrderDate(o) === dateVal);
+        filtered = filtered.filter(o => o.dateString === dateVal || o.endTime.split('T')[0] === dateVal);
       }
 
       // 2. Cabin filter
@@ -9176,9 +9050,7 @@
 
       // Helper to extract HH:MM string from Date
       function getHHMM(dateStr) {
-        if (!dateStr) return '';
         const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return '';
         return formatTimeComponent(d.getHours()) + ':' + formatTimeComponent(d.getMinutes());
       }
 
@@ -9193,11 +9065,7 @@
       }
 
       // Sort orders descending (newest first)
-      filtered.sort((a, b) => {
-        const d1 = new Date(b.endTime || b.created_at || 0);
-        const d2 = new Date(a.endTime || a.created_at || 0);
-        return d1 - d2;
-      });
+      filtered.sort((a, b) => new Date(b.endTime) - new Date(a.endTime));
 
       document.getElementById('history-orders-count').innerText = `${filtered.length} ta buyurtma`;
 
@@ -9209,11 +9077,10 @@
       filtered.forEach(o => {
         const tr = document.createElement('tr');
         
-        const dateObj = new Date(o.endTime || o.created_at || Date.now());
-        const dateStrObj = isNaN(dateObj.getTime()) ? new Date() : dateObj;
-        const dateStr = dateStrObj.toLocaleDateString('uz-UZ');
-        const timeStr = dateStrObj.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
-        const durationStr = formatDuration(o.playedDurationMinutes || 0);
+        const dateObj = new Date(o.endTime);
+        const dateStr = dateObj.toLocaleDateString('uz-UZ');
+        const timeStr = dateObj.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
+        const durationStr = formatDuration(o.playedDurationMinutes);
         const operator = o.operator || 'Ishchi';
 
         tr.innerHTML = `
@@ -9345,7 +9212,7 @@
 
       if (period === 'single') {
         const dateVal = customParams.date;
-        filtered = orders.filter(o => getOrderDate(o) === dateVal);
+        filtered = orders.filter(o => o.endTime.split('T')[0] === dateVal);
         chartTitle = `${dateVal} tushumi (soatlar bo'yicha)`;
 
         // Group by 4-hour slots
@@ -9370,8 +9237,7 @@
         chartTitle = `${startVal} dan ${endVal} gacha tushum grafigi`;
 
         filtered = orders.filter(o => {
-          const d = getOrderDate(o);
-          if (!d) return false;
+          const d = o.endTime.split('T')[0];
           return d >= startVal && d <= endVal;
         });
 
@@ -9386,8 +9252,8 @@
           const label = curr.getDate() + '-' + UZ_MONTHS_SHORT[curr.getMonth()];
           chartLabels.push(label);
 
-          const dayOrders = filtered.filter(o => getOrderDate(o) === dateStr);
-          chartPlayData.push(dayOrders.reduce((s, o) => s + (o.playAmount || 0), 0));
+          const dayOrders = filtered.filter(o => o.endTime.split('T')[0] === dateStr);
+          chartPlayData.push(dayOrders.reduce((s, o) => s + o.playAmount, 0));
           chartProductData.push(dayOrders.reduce((s, o) => s + o.productAmount, 0));
           
           curr.setDate(curr.getDate() + 1);
@@ -9398,7 +9264,7 @@
         switch (period) {
           case 'today':
             const todayStr = now.toISOString().split('T')[0];
-            filtered = orders.filter(o => getOrderDate(o) === todayStr);
+            filtered = orders.filter(o => o.endTime.split('T')[0] === todayStr);
             chartTitle = "Bugungi tushum (soatlar bo'yicha)";
             
             chartLabels = ['00-04', '04-08', '08-12', '12-16', '16-20', '20-24'];
@@ -9421,7 +9287,7 @@
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayStr = yesterday.toISOString().split('T')[0];
-            filtered = orders.filter(o => getOrderDate(o) === yesterdayStr);
+            filtered = orders.filter(o => o.endTime.split('T')[0] === yesterdayStr);
             chartTitle = "Kechagi tushum (soatlar bo'yicha)";
 
             chartLabels = ['00-04', '04-08', '08-12', '12-16', '16-20', '20-24'];
@@ -9450,7 +9316,7 @@
               const dayLabel = d.toLocaleDateString('uz-UZ', { weekday: 'short' }) + ` (${d.getDate()}-${UZ_MONTHS_SHORT[d.getMonth()]})`;
               chartLabels.push(dayLabel);
 
-              const dayOrders = orders.filter(o => getOrderDate(o) === dStr);
+              const dayOrders = orders.filter(o => o.endTime.split('T')[0] === dStr);
               filtered.push(...dayOrders);
 
               chartPlayData.push(dayOrders.reduce((s, o) => s + o.playAmount, 0));
@@ -9656,7 +9522,7 @@
 
       if (period === 'single') {
         const dateVal = customParams.date;
-        filtered = orders.filter(o => getOrderDate(o) === dateVal);
+        filtered = orders.filter(o => o.endTime.split('T')[0] === dateVal);
       } else {
         // Clear date picker when clicking preset periods
         const singleDatePicker = document.getElementById('stats-single-date');
@@ -9664,21 +9530,15 @@
 
         if (period === 'today') {
           const todayStr = now.toISOString().split('T')[0];
-          filtered = orders.filter(o => getOrderDate(o) === todayStr);
+          filtered = orders.filter(o => o.endTime.split('T')[0] === todayStr);
         } else if (period === 'week') {
           const borderDate = new Date();
           borderDate.setDate(borderDate.getDate() - 7);
-          filtered = orders.filter(o => {
-            const dStr = getOrderDate(o);
-            return dStr && new Date(dStr) >= borderDate;
-          });
+          filtered = orders.filter(o => new Date(o.endTime) >= borderDate);
         } else if (period === 'month') {
           const borderDate = new Date();
           borderDate.setDate(borderDate.getDate() - 30);
-          filtered = orders.filter(o => {
-            const dStr = getOrderDate(o);
-            return dStr && new Date(dStr) >= borderDate;
-          });
+          filtered = orders.filter(o => new Date(o.endTime) >= borderDate);
         }
       }
 
@@ -9874,9 +9734,8 @@
           return;
         }
 
-        adminPassword = newPw;
+        localStorage.setItem('aura_admin_password', newPw);
         addLog("Admin paroli o'zgartirildi");
-        saveDB();
         alert("Admin paroli muvaffaqiyatli o'zgartirildi.");
         formChangeAdminPw.reset();
       });
@@ -9893,9 +9752,8 @@
           return;
         }
 
-        workerPassword = newPw;
+        localStorage.setItem('aura_worker_password', newPw);
         addLog("Ishchi (Operator) paroli o'zgartirildi");
-        saveDB();
         alert("Ishchi paroli muvaffaqiyatli o'zgartirildi.");
         formChangeWorkerPw.reset();
       });
@@ -9953,46 +9811,54 @@
     var btnSaveShift = document.getElementById('btn-save-shift');
 
     function getActiveShift() {
-      return activeShift;
+      const s = localStorage.getItem('aura_active_shift');
+      if (!s) return null;
+      try {
+        return JSON.parse(s);
+      } catch (e) {
+        console.error("Corrupted active shift data in localStorage. Clearing it.", e);
+        localStorage.removeItem('aura_active_shift');
+        return null;
+      }
     }
 
     function setActiveShift(shiftObj) {
-      activeShift = shiftObj;
-      saveDB();
+      if (shiftObj) {
+        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
+      } else {
+        localStorage.removeItem('aura_active_shift');
+      }
     }
 
     function renderShiftToggle() {
-      const _btn = document.getElementById('btn-shift-toggle');
-      const _timer = document.getElementById('shift-timer-display');
-      if (!_btn) return;
+      if (!btnShiftToggle) return;
       const activeShift = getActiveShift();
       if (activeShift) {
-        _btn.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
-        _btn.style.background = '#ef4444';
-        _btn.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
-        if (_timer) _timer.style.display = 'block';
+        btnShiftToggle.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
+        btnShiftToggle.style.background = '#ef4444';
+        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
+        shiftTimerDisplay.style.display = 'block';
       } else {
-        _btn.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
-        _btn.style.background = '#0045d8';
-        _btn.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
-        if (_timer) _timer.style.display = 'none';
+        btnShiftToggle.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
+        btnShiftToggle.style.background = '#0045d8';
+        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
+        shiftTimerDisplay.style.display = 'none';
       }
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      lucide.createIcons();
     }
 
     function updateShiftTimer() {
       const activeShift = getActiveShift();
-      const _timerEl = document.getElementById('shift-timer-display');
-      if (activeShift && _timerEl) {
-        const now = getNow(); // Server vaqti bilan moslashtirilgan
+      if (activeShift && shiftTimerDisplay) {
+        const now = new Date();
         const start = new Date(activeShift.startTime);
-        const diffSecs = Math.max(0, Math.floor((now - start) / 1000));
+        const diffSecs = Math.floor((now - start) / 1000);
         
         const h = Math.floor(diffSecs / 3600).toString().padStart(2, '0');
         const m = Math.floor((diffSecs % 3600) / 60).toString().padStart(2, '0');
         const s = (diffSecs % 60).toString().padStart(2, '0');
         
-        _timerEl.innerText = `Ish vaqti: ${h}:${m}:${s}`;
+        shiftTimerDisplay.innerText = `Ish vaqti: ${h}:${m}:${s}`;
       }
     }
 
@@ -10012,10 +9878,7 @@
       const diffH = Math.floor(diffMs / 3600000);
       const diffM = Math.floor((diffMs % 3600000) / 60000);
 
-      const safeDrinksList = drinksList || [];
-      const safeKalyanList = kalyanList || [];
-
-      let drinksHtml = safeDrinksList.map(d => `
+      let drinksHtml = drinksList.map(d => `
         <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
           <span>${d.name} (${d.qty} dona)</span>
           <span>${formatMoney(d.total)}</span>
@@ -10023,7 +9886,7 @@
       `).join('');
       if (!drinksHtml) drinksHtml = '<div style="font-size: 13px; color: #9ca3af; font-style: italic;">Sotuv bo\'lmagan</div>';
 
-      let kalyanHtml = safeKalyanList.map(k => `
+      let kalyanHtml = kalyanList.map(k => `
         <div style="font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px;">
           <div style="display: flex; justify-content: space-between; font-weight: 600;">
             <span>${k.name} (${k.qty} dona)</span>
@@ -10112,7 +9975,8 @@
       if (!container) return;
       container.innerHTML = '';
 
-      // Shifts history is read directly from global variable shiftsHistory
+      const storedShifts = localStorage.getItem('aura_shifts_history');
+      const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
 
       if (shiftsHistory.length === 0) {
         container.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: #9ca3af;">Hozircha smena hisobotlari yo`q.</td></tr>';
@@ -10143,8 +10007,8 @@
           <td>${formatMoney(s.totalPlayAmount || 0)}</td>
           <td>${formatMoney(s.totalDrinksAmount || 0)}</td>
           <td>${formatMoney(s.totalKalyanAmount || 0)}</td>
-          <td style="color: #38bdf8; font-weight: 700;">${formatMoney(s.totalSales !== undefined ? s.totalSales : (s.totalAmount || 0))}</td>
-          <td style="color: #10b981; font-weight: 800;">${formatMoney(s.totalProfit !== undefined ? s.totalProfit : (s.totalAmount || 0))}</td>
+          <td style="color: #38bdf8; font-weight: 700;">${formatMoney(s.totalSales || 0)}</td>
+          <td style="color: #10b981; font-weight: 800;">${formatMoney(s.totalProfit || 0)}</td>
         `;
         
         tr.addEventListener('click', () => {
@@ -10168,7 +10032,55 @@
     
     // Removed broken dynamic hook
 
-    // (Removed redundant initializePage and its DOMContentLoaded handler to prevent data wipe races)
+    // ── PAGE LOAD INITIALIZER ──
+    async function initializePage() {
+      await ensureSupabaseSync();
+      console.log("AuraUI: Initializing page components...");
+      loadDB();
+      AuraUI.initAll();
+      
+      // Set current date on header
+      const now = new Date();
+      const dStr = now.toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' });
+      const dateHeader = document.getElementById('current-date');
+      if (dateHeader) {
+        dateHeader.innerText = `Bugun: ${dStr}`;
+      }
+      
+      // Restore session state
+      const loggedRole = sessionStorage.getItem('aura_logged_role');
+      if (loggedRole === 'worker') {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('admin-app').style.display = 'none';
+        const returnBar = document.getElementById('admin-return-bar');
+        if (returnBar) returnBar.style.display = 'none';
+        
+        if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
+        if (typeof showView === 'function') showView('view-kabinalar');
+        if (typeof renderShiftToggle === 'function') renderShiftToggle();
+        if (typeof startTimerLoop === 'function') startTimerLoop();
+      } else if (loggedRole === 'admin') {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('admin-app').style.display = 'flex';
+        renderDashboard();
+      } else {
+        // Not logged in, show splash
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'flex';
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('admin-app').style.display = 'none';
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', initializePage);
+    } else {
+      initializePage();
+    }
   
     // ── SHIFT MANAGEMENT SYSTEM ──
     var btnShiftToggle = document.getElementById('btn-shift-toggle');
@@ -10178,46 +10090,47 @@
     var btnSaveShift = document.getElementById('btn-save-shift');
 
     function getActiveShift() {
-      return activeShift;
+      const s = localStorage.getItem('aura_active_shift');
+      return s ? JSON.parse(s) : null;
     }
 
     function setActiveShift(shiftObj) {
-      activeShift = shiftObj;
-      saveDB();
+      if (shiftObj) {
+        localStorage.setItem('aura_active_shift', JSON.stringify(shiftObj));
+      } else {
+        localStorage.removeItem('aura_active_shift');
+      }
     }
 
     function renderShiftToggle() {
-      const _btn = document.getElementById('btn-shift-toggle');
-      const _timer = document.getElementById('shift-timer-display');
-      if (!_btn) return;
+      if (!btnShiftToggle) return;
       const activeShift = getActiveShift();
       if (activeShift) {
-        _btn.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
-        _btn.style.background = '#ef4444';
-        _btn.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
-        if (_timer) _timer.style.display = 'block';
+        btnShiftToggle.innerHTML = '<i data-lucide="square" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani tugatish</span>';
+        btnShiftToggle.style.background = '#ef4444';
+        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.2)';
+        shiftTimerDisplay.style.display = 'block';
       } else {
-        _btn.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
-        _btn.style.background = '#0045d8';
-        _btn.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
-        if (_timer) _timer.style.display = 'none';
+        btnShiftToggle.innerHTML = '<i data-lucide="play" style="width: 16px; height: 16px; margin-right: 6px;"></i> <span>Smenani boshlash</span>';
+        btnShiftToggle.style.background = '#0045d8';
+        btnShiftToggle.style.boxShadow = '0 4px 12px rgba(0, 69, 216, 0.2)';
+        shiftTimerDisplay.style.display = 'none';
       }
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      lucide.createIcons();
     }
 
     function updateShiftTimer() {
       const activeShift = getActiveShift();
-      const _timerEl = document.getElementById('shift-timer-display');
-      if (activeShift && _timerEl) {
-        const now = getNow(); // Server vaqti bilan moslashtirilgan
+      if (activeShift && shiftTimerDisplay) {
+        const now = new Date();
         const start = new Date(activeShift.startTime);
-        const diffSecs = Math.max(0, Math.floor((now - start) / 1000));
+        const diffSecs = Math.floor((now - start) / 1000);
         
         const h = Math.floor(diffSecs / 3600).toString().padStart(2, '0');
         const m = Math.floor((diffSecs % 3600) / 60).toString().padStart(2, '0');
         const s = (diffSecs % 60).toString().padStart(2, '0');
         
-        _timerEl.innerText = `Ish vaqti: ${h}:${m}:${s}`;
+        shiftTimerDisplay.innerText = `Ish vaqti: ${h}:${m}:${s}`;
       }
     }
 
@@ -10347,33 +10260,19 @@
     var currentCalculatedShift = null;
 
     function startShift() {
-      setActiveShift({ id: 'SHIFT-' + Date.now(), startTime: getNow().toISOString() });
+      setActiveShift({ startTime: new Date().toISOString() });
       renderShiftToggle();
       updateShiftTimer();
       addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
     }
 
-    async function finishShift() {
+    function finishShift() {
       const activeShift = getActiveShift();
       if (!activeShift) return;
-
-      // Ensure we have the latest orders from Supabase before calculating
-      if (typeof supabaseSyncDown === 'function') {
-        try {
-          await supabaseSyncDown();
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      const endTime = getNow().toISOString();
+      const endTime = new Date().toISOString();
       const startDt = new Date(activeShift.startTime);
       
-      const shiftOrders = orders.filter(o => {
-        const exactTime = o.endTime || o.created_at || o.startTime || o.dateString;
-        if (!exactTime) return false;
-        return new Date(exactTime) >= startDt;
-      });
+      const shiftOrders = orders.filter(o => new Date(o.endTime) >= startDt);
       
       let ps4Amount = 0, ps4Hours = 0, ps4Count = 0;
       let ps5Amount = 0, ps5Hours = 0, ps5Count = 0;
@@ -10382,7 +10281,6 @@
       const drinksMap = {};
       const kalyanMap = {};
       let totalDrinksAmount = 0;
-      let totalDrinksProfit = 0;
       let totalKalyanAmount = 0;
       let totalKalyanProfit = 0;
 
@@ -10390,7 +10288,7 @@
         if (o.playAmount > 0) {
           const cabin = cabins.find(c => c.id === o.cabinId);
           let cType = cabin ? cabin.type : 'PS4';
-          let isVip = cabin && (cabin.id === 'VIP' || String(cabin.name).toUpperCase().includes('VIP') || cabin.subtitle === 'VIP');
+          let isVip = cabin && cabin.id === 'VIP';
           const durationH = o.playedDurationMinutes ? (o.playedDurationMinutes / 60) : 0;
           
           if (isVip) {
@@ -10428,15 +10326,6 @@
               kalyanMap[p.id].profit += pProfit;
             } else {
               totalDrinksAmount += prodSum;
-              let dProfit = 0;
-              const prodObj = PRODUCTS_LIST.find(pl => pl.id === p.id);
-              if (prodObj && prodObj.adminProfit !== undefined && prodObj.adminProfit !== null && prodObj.adminProfit !== "") {
-                  dProfit = Number(prodObj.adminProfit) * p.quantity;
-              } else {
-                  dProfit = prodSum; // Default to 100% of price as profit if no specific adminProfit given
-              }
-              totalDrinksProfit += dProfit;
-
               if (!drinksMap[p.id]) drinksMap[p.id] = { name: p.name, qty: 0, total: 0 };
               drinksMap[p.id].qty += p.quantity;
               drinksMap[p.id].total += prodSum;
@@ -10447,7 +10336,7 @@
 
       const totalPlayAmount = ps4Amount + ps5Amount + vipAmount;
       const totalSales = totalPlayAmount + totalDrinksAmount + totalKalyanAmount;
-      const totalProfit = totalPlayAmount + totalDrinksProfit + totalKalyanProfit;
+      const totalProfit = totalPlayAmount + totalDrinksAmount + totalKalyanProfit;
 
       console.log("Sessions:", shiftOrders.length);
       console.log("Orders:", shiftOrders);
@@ -10463,7 +10352,7 @@
       console.log("Profit:", totalProfit);
 
       currentCalculatedShift = {
-        id: activeShift.id || ('SHIFT-' + Date.now()),
+        id: 'SHIFT-' + Date.now(),
         startTime: activeShift.startTime,
         endTime: endTime,
         ps4Amount, ps4Hours, ps4Count,
@@ -10498,24 +10387,22 @@
     }
 
     if (btnSaveShift) {
-      btnSaveShift.addEventListener('click', async () => {
+      btnSaveShift.addEventListener('click', () => {
         if (!currentCalculatedShift || btnSaveShift.disabled) return;
         
         btnSaveShift.disabled = true;
         const previousText = btnSaveShift.innerHTML;
         btnSaveShift.innerHTML = 'Saqlanmoqda...';
 
-        const activeShiftToClose = getActiveShift();
-        const oldActiveId = activeShiftToClose ? (activeShiftToClose.id || 'SHIFT-ACTIVE') : 'SHIFT-ACTIVE';
-
-        // Save to shifts history (global)
+        // Save to shifts history
+        const storedShifts = localStorage.getItem('aura_shifts_history');
+        const shiftsHistory = storedShifts ? JSON.parse(storedShifts) : [];
         shiftsHistory.push(currentCalculatedShift);
+        localStorage.setItem('aura_shifts_history', JSON.stringify(shiftsHistory));
         
         // Clear active shift and calculated data to prevent resubmission
-        activeShift = null;
+        setActiveShift(null);
         currentCalculatedShift = null;
-        
-        saveDB(); // Upsert will naturally update the old active shift's row to is_active: false
         
         renderShiftToggle();
         modalShiftReport.classList.remove('active');
