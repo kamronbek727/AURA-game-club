@@ -5303,6 +5303,10 @@
         const allowedIds = pProducts.map(p => p.id);
         await supabaseClient.from('products').delete().not('id', 'in', `(${allowedIds.map(id => `'${id}'`).join(',')})`);
 
+        // Kabinalar: faqat CABINS_INITIAL dagi ID'larni saqlash, ortiqchalarini o'chirish
+        const allowedCabinIds = CABINS_INITIAL.map(c => c.id);
+        await supabaseClient.from('cabins').delete().not('id', 'in', `(${allowedCabinIds.map(id => `'${id}'`).join(',')})`);
+
         // Parallel Upserts for efficiency
         const [cRes, pRes, oRes, sRes, setRes] = await Promise.all([
           supabaseClient.from('cabins').upsert(cleanCabins, { onConflict: 'id' }),
@@ -5340,10 +5344,19 @@
 
         if (cabinsRes.error) throw cabinsRes.error;
 
-        // 1. Cabins
+        // 1. Cabins — faqat CABINS_INITIAL dagi kabinalarni olamiz
+        const allowedCabinIds = CABINS_INITIAL.map(c => c.id);
         if (cabinsRes.data && cabinsRes.data.length > 0) {
-           cabins = cabinsRes.data.map(c => {
-             // ID asosida to'g'ri tur va rasmni belgilaymiz (CABINS_INITIAL ID mos kelmasligi muammosidan qochish uchun)
+           cabins = cabinsRes.data
+             .filter(c => {
+               const cabinId = String(c.id).trim();
+               // ID ni normalize qilib CABINS_INITIAL bilan solishtirish ('1' === '01', '6' === '06')
+               return allowedCabinIds.some(aid =>
+                 String(aid) === cabinId ||
+                 String(aid).replace(/^0+/,'') === cabinId.replace(/^0+/,'')
+               );
+             })
+             .map(c => {
              const cabinId = String(c.id).trim();
              
              // Faqat 05 va VIP = PS5, qolganlari PS4
