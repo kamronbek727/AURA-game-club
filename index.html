@@ -5238,7 +5238,7 @@
     // SUPABASE RELATIONAL DATA SYNC LOGIC
     // ==========================================
     
-    async function supabaseSyncUp() {
+    async function supabaseSyncUp(syncProducts = false) {
       if (!supabaseClient) return;
       updateSupabaseStatus('syncing');
       try {
@@ -5264,14 +5264,26 @@
           };
         });
 
-        // Supabase'dagi barcha mahsulotlarni o'chirib, faqat to'g'ri ro'yxatni yozamiz
-        const pProducts = PRODUCTS_LIST.map(p => ({
-            id: p.id,
-            name: p.name,
-            category: p.category,
-            price: p.price,
-            stock: p.stock !== undefined ? p.stock : 20
-        }));
+        // Agar mahsulotlarda o'zgarish bo'lgan bo'lsa, ularni bazaga yozamiz
+        if (syncProducts) {
+            const pProducts = PRODUCTS_LIST.map(p => ({
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                price: p.price,
+                stock: p.stock !== undefined ? p.stock : 20,
+                adminProfit: p.adminProfit,
+                img: p.img
+            }));
+            try {
+                // Products upsert was moved to syncProducts block
+                const allowedIds = pProducts.map(p => p.id);
+                await supabaseClient.from('products').delete().not('id', 'in', `(${allowedIds.map(id => `'${id}'`).join(',')})`);
+                await supabaseClient.from('products').upsert(pProducts, { onConflict: 'id' });
+            } catch (e) {
+                console.error("Products sync error:", e);
+            }
+        }
 
         const pOrders = orders.map(o => ({
             id: o.id || `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -5306,25 +5318,20 @@
           { key: 'prices', value: prices }
         ];
 
-        // Mahsulotlar: avval barcha keraksizlarni o'chiramiz, keyin to'g'ri ro'yxatni yozamiz
-        const allowedIds = pProducts.map(p => p.id);
-        await supabaseClient.from('products').delete().not('id', 'in', `(${allowedIds.map(id => `'${id}'`).join(',')})`);
-
         // Kabinalar: faqat CABINS_INITIAL dagi ID'larni saqlash, ortiqchalarini o'chirish
         const allowedCabinIds = CABINS_INITIAL.map(c => c.id);
         await supabaseClient.from('cabins').delete().not('id', 'in', `(${allowedCabinIds.map(id => `'${id}'`).join(',')})`);
 
         // Parallel Upserts for efficiency
-        const [cRes, pRes, oRes, sRes, setRes] = await Promise.all([
+        const [cRes, oRes, sRes, setRes] = await Promise.all([
           supabaseClient.from('cabins').upsert(cleanCabins, { onConflict: 'id' }),
-          supabaseClient.from('products').upsert(pProducts, { onConflict: 'id' }),
           supabaseClient.from('orders').upsert(pOrders, { onConflict: 'id' }),
           pShifts.length > 0 ? supabaseClient.from('shifts').upsert(pShifts, { onConflict: 'id' }) : Promise.resolve({}),
           supabaseClient.from('settings').upsert(pSettings, { onConflict: 'key' })
         ]);
 
-        if (cRes.error || pRes.error || oRes.error || (sRes && sRes.error) || setRes.error) {
-            console.error('Supabase Sync Up Error Details:', cRes.error, pRes.error, oRes.error, sRes?.error, setRes.error);
+        if (cRes.error || oRes.error || (sRes && sRes.error) || setRes.error) {
+            console.error('Supabase Sync Up Error Details:', cRes.error, oRes.error, sRes?.error, setRes.error);
         }
 
         updateSupabaseStatus('connected');
@@ -5397,6 +5404,24 @@
                img: cabinImg
              };
            });
+
+           // Sort cabins using explicit predefined numbering
+           cabins.sort((a, b) => {
+               const getScore = (c) => {
+                   const s = String(c.id).trim().toUpperCase();
+                   const n = String(c.name).trim().toUpperCase();
+                   if (s.includes('VIP') || n.includes('VIP')) return 99;
+                   if (s === '01' || s === '1' || n.includes('01') || n.endsWith(' 1')) return 1;
+                   if (s === '02' || s === '2' || n.includes('02') || n.endsWith(' 2')) return 2;
+                   if (s === '03' || s === '3' || n.includes('03') || n.endsWith(' 3')) return 3;
+                   if (s === '04' || s === '4' || n.includes('04') || n.endsWith(' 4')) return 4;
+                   if (s === '05' || s === '5' || n.includes('05') || n.endsWith(' 5')) return 5;
+                   if (s === '06' || s === '6' || n.includes('06') || n.endsWith(' 6')) return 6;
+                   if (s === '07' || s === '7' || n.includes('07') || n.endsWith(' 7')) return 7;
+                   return 999;
+               };
+               return getScore(a) - getScore(b);
+           });
         }
 
         // 2. Products - PRODUCTS_LIST har doim to'g'ri 6 ta mahsulotdan iborat.
@@ -5405,12 +5430,25 @@
            const allowedIds = PRODUCTS_LIST.map(p => p.id);
            productsRes.data.forEach(dbP => {
              // Faqat bizning ro'yxatdagi mahsulotlarni yangilaymiz
-             if (!allowedIds.includes(dbP.id)) return;
+             if (!allowedIds.includes(dbP.id)) {
+                 PRODUCTS_LIST.push({
+                     id: dbP.id,
+                     name: dbP.name,
+                     category: dbP.category,
+                     price: dbP.price,
+                     stock: dbP.stock !== undefined ? dbP.stock : 20,
+                     adminProfit: dbP.adminProfit,
+                     img: dbP.img || 'rasmlar/logo.png'
+                 });
+                 return;
+             }
              const localP = PRODUCTS_LIST.find(p => p.id === dbP.id);
              if (localP) {
                if (dbP.stock !== undefined && dbP.stock !== null) localP.stock = dbP.stock;
-               if (dbP.price) localP.price = dbP.price;
+               if (dbP.price !== undefined) localP.price = dbP.price;
                if (dbP.name) localP.name = dbP.name;
+               if (dbP.adminProfit !== undefined) localP.adminProfit = dbP.adminProfit;
+               if (dbP.img) localP.img = dbP.img;
              }
            });
         }
@@ -5570,8 +5608,8 @@
       });
     }
 
-    function saveDB() {
-      supabaseSyncUp();
+    function saveDB(syncProducts = false) {
+      supabaseSyncUp(syncProducts);
     }
 
     // UTILITIES
@@ -5723,7 +5761,26 @@
     // VIEW 1: CABINS GRID RENDER
     function renderCabinsGrid() {
       const container = document.getElementById('cabins-container');
+      if (!container) return;
       container.innerHTML = '';
+
+      // Har doim qat'iy ravishda kabina raqami bo'yicha saralash (eng ishonchli usul)
+      cabins.sort((a, b) => {
+           const getScore = (c) => {
+               const s = String(c.id).trim().toUpperCase();
+               const n = String(c.name).trim().toUpperCase();
+               if (s.includes('VIP') || n.includes('VIP')) return 99;
+               if (s === '01' || s === '1' || n.includes('01') || n.endsWith(' 1')) return 1;
+               if (s === '02' || s === '2' || n.includes('02') || n.endsWith(' 2')) return 2;
+               if (s === '03' || s === '3' || n.includes('03') || n.endsWith(' 3')) return 3;
+               if (s === '04' || s === '4' || n.includes('04') || n.endsWith(' 4')) return 4;
+               if (s === '05' || s === '5' || n.includes('05') || n.endsWith(' 5')) return 5;
+               if (s === '06' || s === '6' || n.includes('06') || n.endsWith(' 6')) return 6;
+               if (s === '07' || s === '7' || n.includes('07') || n.endsWith(' 7')) return 7;
+               return 999;
+           };
+           return getScore(a) - getScore(b);
+      });
 
       // Get filtered cabins
       let filtered = [...cabins];
@@ -6707,7 +6764,7 @@
       pendingOrderRecord = null;
       pendingCabinId = null;
 
-      saveDB();
+      saveDB(true);
       renderCabinsGrid();
 
       // Close receipt modal and go back to cabins
@@ -8990,7 +9047,7 @@
           }
         }
 
-        saveDB();
+        saveDB(true);
         closeAllModals();
         renderAdminProductsList();
       });
@@ -9005,8 +9062,13 @@
         if (idx !== -1) {
           PRODUCTS_LIST.splice(idx, 1);
         }
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+           supabaseClient.from('products').delete().eq('id', productId).then(() => {
+               console.log("Deleted product from supabase");
+           });
+        }
         addLog(`Mahsulot o'chirildi: ${p.name}`);
-        saveDB();
+        saveDB(true);
         renderAdminProductsList();
       }
     }
@@ -10064,8 +10126,8 @@
           <td>${formatMoney(s.totalPlayAmount || 0)}</td>
           <td>${formatMoney(s.totalDrinksAmount || 0)}</td>
           <td>${formatMoney(s.totalKalyanAmount || 0)}</td>
-          <td style="color: #38bdf8; font-weight: 700;">${formatMoney(s.totalSales || 0)}</td>
-          <td style="color: #10b981; font-weight: 800;">${formatMoney(s.totalProfit || 0)}</td>
+          <td style="color: #38bdf8; font-weight: 700;">${formatMoney(s.totalSales !== undefined ? s.totalSales : (s.totalAmount || 0))}</td>
+          <td style="color: #10b981; font-weight: 800;">${formatMoney(s.totalProfit !== undefined ? s.totalProfit : (s.totalAmount || 0))}</td>
         `;
         
         tr.addEventListener('click', () => {
@@ -10303,6 +10365,7 @@
       const drinksMap = {};
       const kalyanMap = {};
       let totalDrinksAmount = 0;
+      let totalDrinksProfit = 0;
       let totalKalyanAmount = 0;
       let totalKalyanProfit = 0;
 
@@ -10348,6 +10411,15 @@
               kalyanMap[p.id].profit += pProfit;
             } else {
               totalDrinksAmount += prodSum;
+              let dProfit = 0;
+              const prodObj = PRODUCTS_LIST.find(pl => pl.id === p.id);
+              if (prodObj && prodObj.adminProfit !== undefined && prodObj.adminProfit !== null && prodObj.adminProfit !== "") {
+                  dProfit = Number(prodObj.adminProfit) * p.quantity;
+              } else {
+                  dProfit = prodSum; // Default to 100% of price as profit if no specific adminProfit given
+              }
+              totalDrinksProfit += dProfit;
+
               if (!drinksMap[p.id]) drinksMap[p.id] = { name: p.name, qty: 0, total: 0 };
               drinksMap[p.id].qty += p.quantity;
               drinksMap[p.id].total += prodSum;
@@ -10358,7 +10430,7 @@
 
       const totalPlayAmount = ps4Amount + ps5Amount + vipAmount;
       const totalSales = totalPlayAmount + totalDrinksAmount + totalKalyanAmount;
-      const totalProfit = totalPlayAmount + totalDrinksAmount + totalKalyanProfit;
+      const totalProfit = totalPlayAmount + totalDrinksProfit + totalKalyanProfit;
 
       console.log("Sessions:", shiftOrders.length);
       console.log("Orders:", shiftOrders);
