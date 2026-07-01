@@ -8404,7 +8404,7 @@
       const todayStr = now.toISOString().split('T')[0];
 
       // Calculate Bugungi buyurtmalar (Today's orders)
-      const todayOrders = orders.filter(o => o.endTime.split('T')[0] === todayStr);
+      const todayOrders = orders.filter(o => getOrderDate(o) === todayStr);
       const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.adminTotalAmount !== undefined ? o.adminTotalAmount : o.totalAmount), 0);
       const todayPlaySum = todayOrders.reduce((sum, o) => sum + o.playAmount, 0);
       const todayProductSum = todayOrders.reduce((sum, o) => sum + (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount), 0);
@@ -8605,7 +8605,7 @@
         labels.push(dayLabel);
 
         // Sum orders
-        const dayOrders = ordersData.filter(o => o.endTime.split('T')[0] === dateStr);
+        const dayOrders = ordersData.filter(o => getOrderDate(o) === dateStr);
         const playSum = dayOrders.reduce((sum, o) => sum + o.playAmount, 0);
         const prodSum = dayOrders.reduce((sum, o) => sum + o.productAmount, 0);
         
@@ -9082,7 +9082,7 @@
 
       // 1. Date filter
       if (dateVal) {
-        filtered = filtered.filter(o => o.dateString === dateVal || (o.endTime && o.endTime.split('T')[0] === dateVal) || (o.created_at && o.created_at.split('T')[0] === dateVal));
+        filtered = filtered.filter(o => getOrderDate(o) === dateVal);
       }
 
       // 2. Cabin filter
@@ -9092,7 +9092,9 @@
 
       // Helper to extract HH:MM string from Date
       function getHHMM(dateStr) {
+        if (!dateStr) return '';
         const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
         return formatTimeComponent(d.getHours()) + ':' + formatTimeComponent(d.getMinutes());
       }
 
@@ -9107,7 +9109,11 @@
       }
 
       // Sort orders descending (newest first)
-      filtered.sort((a, b) => new Date(b.endTime) - new Date(a.endTime));
+      filtered.sort((a, b) => {
+        const d1 = new Date(b.endTime || b.created_at || 0);
+        const d2 = new Date(a.endTime || a.created_at || 0);
+        return d1 - d2;
+      });
 
       document.getElementById('history-orders-count').innerText = `${filtered.length} ta buyurtma`;
 
@@ -9119,10 +9125,11 @@
       filtered.forEach(o => {
         const tr = document.createElement('tr');
         
-        const dateObj = new Date(o.endTime);
-        const dateStr = dateObj.toLocaleDateString('uz-UZ');
-        const timeStr = dateObj.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
-        const durationStr = formatDuration(o.playedDurationMinutes);
+        const dateObj = new Date(o.endTime || o.created_at || Date.now());
+        const dateStrObj = isNaN(dateObj.getTime()) ? new Date() : dateObj;
+        const dateStr = dateStrObj.toLocaleDateString('uz-UZ');
+        const timeStr = dateStrObj.toLocaleTimeString('uz-UZ', {hour: '2-digit', minute: '2-digit'});
+        const durationStr = formatDuration(o.playedDurationMinutes || 0);
         const operator = o.operator || 'Ishchi';
 
         tr.innerHTML = `
@@ -9254,7 +9261,7 @@
 
       if (period === 'single') {
         const dateVal = customParams.date;
-        filtered = orders.filter(o => o.endTime.split('T')[0] === dateVal);
+        filtered = orders.filter(o => getOrderDate(o) === dateVal);
         chartTitle = `${dateVal} tushumi (soatlar bo'yicha)`;
 
         // Group by 4-hour slots
@@ -9279,7 +9286,8 @@
         chartTitle = `${startVal} dan ${endVal} gacha tushum grafigi`;
 
         filtered = orders.filter(o => {
-          const d = o.endTime.split('T')[0];
+          const d = getOrderDate(o);
+          if (!d) return false;
           return d >= startVal && d <= endVal;
         });
 
@@ -9294,8 +9302,8 @@
           const label = curr.getDate() + '-' + UZ_MONTHS_SHORT[curr.getMonth()];
           chartLabels.push(label);
 
-          const dayOrders = filtered.filter(o => o.endTime.split('T')[0] === dateStr);
-          chartPlayData.push(dayOrders.reduce((s, o) => s + o.playAmount, 0));
+          const dayOrders = filtered.filter(o => getOrderDate(o) === dateStr);
+          chartPlayData.push(dayOrders.reduce((s, o) => s + (o.playAmount || 0), 0));
           chartProductData.push(dayOrders.reduce((s, o) => s + o.productAmount, 0));
           
           curr.setDate(curr.getDate() + 1);
@@ -9306,7 +9314,7 @@
         switch (period) {
           case 'today':
             const todayStr = now.toISOString().split('T')[0];
-            filtered = orders.filter(o => o.endTime.split('T')[0] === todayStr);
+            filtered = orders.filter(o => getOrderDate(o) === todayStr);
             chartTitle = "Bugungi tushum (soatlar bo'yicha)";
             
             chartLabels = ['00-04', '04-08', '08-12', '12-16', '16-20', '20-24'];
@@ -9329,7 +9337,7 @@
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayStr = yesterday.toISOString().split('T')[0];
-            filtered = orders.filter(o => o.endTime.split('T')[0] === yesterdayStr);
+            filtered = orders.filter(o => getOrderDate(o) === yesterdayStr);
             chartTitle = "Kechagi tushum (soatlar bo'yicha)";
 
             chartLabels = ['00-04', '04-08', '08-12', '12-16', '16-20', '20-24'];
@@ -9358,7 +9366,7 @@
               const dayLabel = d.toLocaleDateString('uz-UZ', { weekday: 'short' }) + ` (${d.getDate()}-${UZ_MONTHS_SHORT[d.getMonth()]})`;
               chartLabels.push(dayLabel);
 
-              const dayOrders = orders.filter(o => o.endTime.split('T')[0] === dStr);
+              const dayOrders = orders.filter(o => getOrderDate(o) === dStr);
               filtered.push(...dayOrders);
 
               chartPlayData.push(dayOrders.reduce((s, o) => s + o.playAmount, 0));
@@ -9564,7 +9572,7 @@
 
       if (period === 'single') {
         const dateVal = customParams.date;
-        filtered = orders.filter(o => o.endTime.split('T')[0] === dateVal);
+        filtered = orders.filter(o => getOrderDate(o) === dateVal);
       } else {
         // Clear date picker when clicking preset periods
         const singleDatePicker = document.getElementById('stats-single-date');
@@ -9572,15 +9580,21 @@
 
         if (period === 'today') {
           const todayStr = now.toISOString().split('T')[0];
-          filtered = orders.filter(o => o.endTime.split('T')[0] === todayStr);
+          filtered = orders.filter(o => getOrderDate(o) === todayStr);
         } else if (period === 'week') {
           const borderDate = new Date();
           borderDate.setDate(borderDate.getDate() - 7);
-          filtered = orders.filter(o => new Date(o.endTime) >= borderDate);
+          filtered = orders.filter(o => {
+            const dStr = getOrderDate(o);
+            return dStr && new Date(dStr) >= borderDate;
+          });
         } else if (period === 'month') {
           const borderDate = new Date();
           borderDate.setDate(borderDate.getDate() - 30);
-          filtered = orders.filter(o => new Date(o.endTime) >= borderDate);
+          filtered = orders.filter(o => {
+            const dStr = getOrderDate(o);
+            return dStr && new Date(dStr) >= borderDate;
+          });
         }
       }
 
