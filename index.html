@@ -7314,11 +7314,22 @@
         sessionStorage.setItem('aura_logged_role', 'admin');
       }
 
-      // 4. Avval Supabase'ni tozalaymiz (noto'g'ri mahsulotlarni o'chiramiz)
-      await supabaseSyncUp();
-      // So'ng Supabase'dan yangilangan ma'lumotlarni yuklaymiz
+      // 4. BIRINCHI Supabase'dan haqiqiy ma'lumotlarni yuklaymiz (kabina sessiyalari, buyurtmalar...)
       await supabaseSyncDown();
       await syncServerTime();
+
+      // 5. Faqat keraksiz mahsulot va kabinalarni o'chiramiz (sessiyalarni ASLO o'zgartirmaymiz)
+      if (supabaseClient) {
+        try {
+          const allowedProductIds = PRODUCTS_LIST.map(p => `'${p.id}'`).join(',');
+          const allowedCabinIds = CABINS_INITIAL.map(c => `'${c.id}'`).join(',');
+          await Promise.all([
+            supabaseClient.from('products').delete().not('id', 'in', `(${allowedProductIds})`),
+            supabaseClient.from('cabins').delete().not('id', 'in', `(${allowedCabinIds})`)
+          ]);
+        } catch(e) { /* cleanup xatosi dasturni to'xtatmasin */ }
+      }
+
       setupSupabaseRealtime();
 
       // 5. Ma'lumot yuklangandan KEYIN UI ko'rsatamiz
