@@ -5078,6 +5078,7 @@
     let shiftTickBaseAt = null;
     let shiftTickBaseElapsed = 0;
     let shiftTickStartTime = null;
+    const auraCabinTimers = {};
 
     function auraNow() {
       return new Date(Date.now() + auraServerTimeOffset);
@@ -5127,10 +5128,39 @@
       return auraNow().toISOString();
     }
 
-    function auraBindSessionTimer(session) {
-      if (!session) return;
-      session._tickBaseElapsed = 0;
-      session._tickBaseAt = Date.now();
+    function auraSetCabinTimer(cabinId, startTime, elapsed) {
+      if (!cabinId || !startTime) return;
+      auraCabinTimers[cabinId] = {
+        startTime: startTime,
+        elapsed: elapsed || 0,
+        tickAt: Date.now()
+      };
+    }
+
+    function auraClearCabinTimer(cabinId) {
+      if (cabinId) delete auraCabinTimers[cabinId];
+    }
+
+    function auraReconcileCabinTimers(prevStartTimes) {
+      cabins.forEach(c => {
+        if (c.status !== "O'yinda" || !c.session || !c.session.startTime) {
+          auraClearCabinTimer(c.id);
+          return;
+        }
+
+        const st = c.session.startTime;
+        const existing = auraCabinTimers[c.id];
+        const prevStart = prevStartTimes ? prevStartTimes[c.id] : undefined;
+
+        if (existing && existing.startTime === st) {
+          const currentElapsed = Math.max(0, existing.elapsed + Math.floor((Date.now() - existing.tickAt) / 1000));
+          auraSetCabinTimer(c.id, st, currentElapsed);
+        } else if (prevStart !== st) {
+          auraSetCabinTimer(c.id, st, 0);
+        } else if (!existing) {
+          auraSetCabinTimer(c.id, st, 0);
+        }
+      });
     }
 
     function auraBindShiftTimer() {
@@ -5144,33 +5174,6 @@
       shiftTickBaseElapsed = 0;
       shiftTickBaseAt = Date.now();
       shiftTickStartTime = activeShift.startTime;
-    }
-
-    function auraAnchorSessionTimers(prevCabins, options) {
-      const prev = prevCabins || [];
-      const isPageLoad = options && options.isPageLoad;
-
-      cabins.forEach(c => {
-        if (c.status !== "O'yinda" || !c.session) return;
-
-        const prevCabin = prev.find(p => p.id === c.id);
-        const startChanged = !prevCabin || !prevCabin.session || prevCabin.session.startTime !== c.session.startTime;
-        let elapsed = 0;
-
-        if (isPageLoad) {
-          elapsed = Math.max(0, Math.floor((Date.now() - new Date(c.session.startTime).getTime()) / 1000));
-        } else if (startChanged) {
-          elapsed = 0;
-        } else if (prevCabin && prevCabin.session && prevCabin.session._tickBaseAt != null) {
-          const delta = Math.floor((Date.now() - prevCabin.session._tickBaseAt) / 1000);
-          elapsed = Math.max(0, (prevCabin.session._tickBaseElapsed || 0) + delta);
-        } else {
-          elapsed = Math.max(0, Math.floor((Date.now() - new Date(c.session.startTime).getTime()) / 1000));
-        }
-
-        c.session._tickBaseElapsed = elapsed;
-        c.session._tickBaseAt = Date.now();
-      });
     }
 
     function auraAnchorShiftFromRemote(previousStartTime) {
@@ -5247,9 +5250,10 @@
     }
 
     function auraRefreshAfterRemoteSync(changedKey, previousValue) {
-      const prevCabins = changedKey === 'aura_cabins_data'
-        ? JSON.parse(JSON.stringify(cabins))
-        : null;
+      const prevStartTimes = {};
+      cabins.forEach(c => {
+        if (c.session && c.session.startTime) prevStartTimes[c.id] = c.session.startTime;
+      });
 
       let prevShiftStartTime = null;
       if (changedKey === 'aura_active_shift' && previousValue) {
@@ -5261,7 +5265,7 @@
       if (typeof loadDB === 'function') loadDB();
       if (typeof syncCabinsAndPricesWithAdmin === 'function') syncCabinsAndPricesWithAdmin();
 
-      if (prevCabins) auraAnchorSessionTimers(prevCabins);
+      auraReconcileCabinTimers(prevStartTimes);
       if (changedKey === 'aura_active_shift') auraAnchorShiftFromRemote(prevShiftStartTime);
 
       if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
@@ -5560,8 +5564,6 @@
         const sessionCopy = { ...c.session };
         delete sessionCopy.elapsedSeconds;
         delete sessionCopy.remainingSeconds;
-        delete sessionCopy._tickBaseElapsed;
-        delete sessionCopy._tickBaseAt;
         return { ...c, session: sessionCopy };
       });
       localStorage.setItem('aura_cabins_data', JSON.stringify(cabinsForStorage));
@@ -5590,26 +5592,22 @@
       return `${mins} daqiqa`;
     }
 
-    function getSessionRemainingSeconds(session) {
+    function getSessionRemainingSeconds(session, cabinId) {
       if (!session || !session.endTime) return 0;
       const end = new Date(session.endTime).getTime();
       const start = session.startTime ? new Date(session.startTime).getTime() : null;
       if (start != null) {
         const totalSecs = Math.max(0, Math.floor((end - start) / 1000));
-        return Math.max(0, totalSecs - getSessionElapsedSeconds(session));
+        return Math.max(0, totalSecs - getSessionElapsedSeconds(session, cabinId));
       }
       return Math.max(0, Math.floor((end - Date.now()) / 1000));
     }
 
-    function getSessionElapsedSeconds(session) {
-      if (!session || !session.startTime) return 0;
-
-      if (session._tickBaseAt != null) {
-        const delta = Math.floor((Date.now() - session._tickBaseAt) / 1000);
-        return Math.max(0, (session._tickBaseElapsed || 0) + delta);
-      }
-
-      return Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000));
+    function getSessionElapsedSeconds(session, cabinId) {
+      if (!session || !session.startTime || !cabinId) return 0;
+      const t = auraCabinTimers[cabinId];
+      if (!t || t.startTime !== session.startTime) return 0;
+      return Math.max(0, t.elapsed + Math.floor((Date.now() - t.tickAt) / 1000));
     }
 
     function getShiftElapsedSeconds(startTime) {
@@ -5676,7 +5674,7 @@
           let timerHTML = '';
 
           if (c.session.endTime) {
-            const secondsLeft = getSessionRemainingSeconds(c.session);
+            const secondsLeft = getSessionRemainingSeconds(c.session, c.id);
 
             if (secondsLeft <= 0) {
               statusClass = 'status-band';
@@ -5699,7 +5697,7 @@
               }
             }
           } else {
-            const secs = getSessionElapsedSeconds(c.session);
+            const secs = getSessionElapsedSeconds(c.session, c.id);
             const timeStr = formatSecondsAsHMS(secs);
             statusClass = 'status-oyinda';
             dotClass = 'dot-oyinda';
@@ -5771,7 +5769,7 @@
         } else if (currentCabinFilter === 'Yaqin') {
           // Yaqin = running cabins with least remaining time
           filtered = filtered.filter(c => c.status === "O'yinda" && c.session && c.session.endTime);
-          filtered.sort((a, b) => getSessionRemainingSeconds(a.session) - getSessionRemainingSeconds(b.session));
+          filtered.sort((a, b) => getSessionRemainingSeconds(a.session, a.id) - getSessionRemainingSeconds(b.session, b.id));
         }
       }
 
@@ -5787,7 +5785,7 @@
 
         if (c.status === "O'yinda" && c.session) {
           if (c.session.endTime) {
-            const secondsLeft = getSessionRemainingSeconds(c.session);
+            const secondsLeft = getSessionRemainingSeconds(c.session, c.id);
             const timeStr = formatSecondsAsHMS(secondsLeft);
 
             if (secondsLeft <= 300 && secondsLeft > 0) {
@@ -5810,7 +5808,7 @@
             }
           } else {
             // Unlimited
-            const secs = getSessionElapsedSeconds(c.session);
+            const secs = getSessionElapsedSeconds(c.session, c.id);
             const timeStr = formatSecondsAsHMS(secs);
 
             statusClass = 'status-oyinda';
@@ -5976,7 +5974,7 @@
         durationMinutes: durationMinutes,
         products: []
       };
-      auraBindSessionTimer(cabin.session);
+      auraSetCabinTimer(cabin.id, startTimeISO, 0);
 
       saveDB();
       renderCabinsGrid();
@@ -6016,7 +6014,7 @@
       statusDot.className = 'cabin-dot';
 
       if (cabin.session.endTime) {
-        const leftSecs = getSessionRemainingSeconds(cabin.session);
+        const leftSecs = getSessionRemainingSeconds(cabin.session, cabin.id);
         if (leftSecs <= 0) {
           statusBadge.className = 'details-badge status-band';
           statusDot.className = 'cabin-dot dot-band';
@@ -6042,7 +6040,7 @@
       timerVal.className = 'details-timer-val';
 
       if (cabin.session.endTime) {
-        const leftSecs = getSessionRemainingSeconds(cabin.session);
+        const leftSecs = getSessionRemainingSeconds(cabin.session, cabin.id);
         timerVal.innerText = formatSecondsAsHMS(leftSecs);
         timerLabel.innerText = "Qolgan vaqt";
 
@@ -6054,7 +6052,7 @@
           timerVal.classList.add('timer-oyinda');
         }
       } else {
-        const elapSecs = getSessionElapsedSeconds(cabin.session);
+        const elapSecs = getSessionElapsedSeconds(cabin.session, cabin.id);
         timerVal.innerText = formatSecondsAsHMS(elapSecs);
         timerLabel.innerText = "O'tilgan vaqt";
         timerVal.classList.add('timer-oyinda');
@@ -6101,7 +6099,7 @@
 
       const now = auraNow();
       const start = new Date(cabin.session.startTime);
-      let playedMs = getSessionElapsedSeconds(cabin.session) * 1000;
+      let playedMs = getSessionElapsedSeconds(cabin.session, cabin.id) * 1000;
 
       // If limited session is finished, limit calculations to expected end time
       if (cabin.session.endTime) {
@@ -6211,11 +6209,10 @@
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
-      const elapsed = getSessionElapsedSeconds(cabin.session);
+      const elapsed = getSessionElapsedSeconds(cabin.session, cabin.id);
       cabin.session.endTime = null;
       cabin.session.durationMinutes = null;
-      cabin.session._tickBaseElapsed = elapsed;
-      cabin.session._tickBaseAt = Date.now();
+      auraSetCabinTimer(cabin.id, cabin.session.startTime, elapsed);
       
       saveDB();
       updateTimers();
@@ -6730,6 +6727,7 @@
       if (cabin) {
         cabin.status = "Bo'sh";
         cabin.session = null;
+        auraClearCabinTimer(cabin.id);
       }
 
       // Deduct product stock from inventory
@@ -7459,7 +7457,7 @@
       await ensureSupabaseSync();
       syncCabinsAndPricesWithAdmin();
       loadDB();
-      auraAnchorSessionTimers([], { isPageLoad: true });
+      auraReconcileCabinTimers();
       auraBindShiftTimer();
       lucide.createIcons();
       startTimerLoop();
@@ -8498,6 +8496,7 @@
     // Module Initializer router
     function initViewModule(viewId) {
       loadDB();
+      auraReconcileCabinTimers();
       switch (viewId) {
         case 'dashboard':
           renderDashboard();
@@ -8574,7 +8573,7 @@
         if (c.status === "O'yinda") {
           if (c.session && c.session.endTime) {
             // Limited session
-            const diffMs = getSessionRemainingSeconds(c.session) * 1000;
+            const diffMs = getSessionRemainingSeconds(c.session, c.id) * 1000;
             if (diffMs <= 0) {
               badgeHTML = `<span class="badge badge-red">Tugadi</span>`;
             } else {
@@ -10208,7 +10207,7 @@
       await ensureSupabaseSync();
       console.log("AuraUI: Initializing page components...");
       loadDB();
-      auraAnchorSessionTimers([], { isPageLoad: true });
+      auraReconcileCabinTimers();
       auraBindShiftTimer();
       AuraUI.initAll();
       
