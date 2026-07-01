@@ -7339,18 +7339,7 @@
       await supabaseSyncDown();
       await syncServerTime();
 
-      // 5. Faqat keraksiz mahsulot va kabinalarni o'chiramiz (sessiyalarni ASLO o'zgartirmaymiz)
-      if (supabaseClient) {
-        try {
-          const allowedProductIds = PRODUCTS_LIST.map(p => `'${p.id}'`).join(',');
-          const allowedCabinIds = CABINS_INITIAL.map(c => `'${c.id}'`).join(',');
-          await Promise.all([
-            supabaseClient.from('products').delete().not('id', 'in', `(${allowedProductIds})`),
-            supabaseClient.from('cabins').delete().not('id', 'in', `(${allowedCabinIds})`)
-          ]);
-        } catch(e) { /* cleanup xatosi dasturni to'xtatmasin */ }
-      }
-
+      // (Supabase cleanup is handled safely during saveDB / supabaseSyncUp, not on page load)
       setupSupabaseRealtime();
 
       // 5. Ma'lumot yuklangandan KEYIN UI ko'rsatamiz
