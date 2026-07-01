@@ -5378,7 +5378,7 @@
                subtitle: cabinSubtitle,
                pricePerHour: c.price_per_hour,
                status: c.status,
-               session: c.session,
+               session: typeof c.session === 'string' ? JSON.parse(c.session) : c.session,
                img: cabinImg
              };
            });
@@ -5427,7 +5427,7 @@
               startTime: s.started_at,
               endTime: s.ended_at,
               totalAmount: s.total_revenue,
-              orderCount: s.total_orders
+              orderCount: s.orderCount
            })).sort((a,b) => new Date(b.startTime) - new Date(a.startTime));
         }
 
@@ -5905,7 +5905,7 @@
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin) return;
 
-      const now = new Date();
+      const now = getNow();
       let endTime = null;
       let durationMinutes = null;
 
@@ -6058,7 +6058,7 @@
     function calculateSessionCosts(cabin) {
       if (!cabin || !cabin.session) return { playAmount: 0, productsAmount: 0, totalAmount: 0, playedMinutes: 0 };
 
-      const now = new Date();
+      const now = getNow();
       const start = new Date(cabin.session.startTime);
       let playedMs = now - start;
 
