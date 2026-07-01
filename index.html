@@ -8328,7 +8328,8 @@
 
     // Module Initializer router
     function initViewModule(viewId) {
-      loadDB();
+      // loadDB() CHAQIRILMAYDI — ma'lumotlar Supabase'dan bir marta yuklanadi va Realtime orqali yangilanadi.
+      // loadDB() chaqirilsa barcha Supabase ma'lumotlari bo'shatiladi!
       switch (viewId) {
         case 'dashboard':
           renderDashboard();
