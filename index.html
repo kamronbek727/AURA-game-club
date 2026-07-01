@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>AURA PlayStation Club SRM</title>
+  <link rel="icon" type="image/png" href="rasmlar/logo.png">
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -5261,8 +5262,7 @@
             name: p.name,
             category: p.category,
             price: p.price,
-            stock: p.stock !== undefined ? p.stock : 20,
-            img: p.img || ''
+            stock: p.stock !== undefined ? p.stock : 20
         }));
 
         const pOrders = orders.map(o => ({
