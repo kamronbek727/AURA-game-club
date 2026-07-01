@@ -5299,7 +5299,8 @@
              started_at: activeShift.startTime || new Date().toISOString(),
              is_active: true,
              total_revenue: activeShift.totalAmount || 0,
-             total_orders: activeShift.orderCount || 0
+             total_orders: activeShift.orderCount || 0,
+             details: activeShift
            });
         }
         shiftsHistory.forEach(s => {
@@ -5309,7 +5310,8 @@
              ended_at: s.endTime,
              is_active: false,
              total_revenue: s.totalAmount || s.totalRevenue || 0,
-             total_orders: s.orderCount || 0
+             total_orders: s.orderCount || 0,
+             details: s
            });
         });
 
@@ -10010,7 +10012,10 @@
       const diffH = Math.floor(diffMs / 3600000);
       const diffM = Math.floor((diffMs % 3600000) / 60000);
 
-      let drinksHtml = drinksList.map(d => `
+      const safeDrinksList = drinksList || [];
+      const safeKalyanList = kalyanList || [];
+
+      let drinksHtml = safeDrinksList.map(d => `
         <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
           <span>${d.name} (${d.qty} dona)</span>
           <span>${formatMoney(d.total)}</span>
@@ -10018,7 +10023,7 @@
       `).join('');
       if (!drinksHtml) drinksHtml = '<div style="font-size: 13px; color: #9ca3af; font-style: italic;">Sotuv bo\'lmagan</div>';
 
-      let kalyanHtml = kalyanList.map(k => `
+      let kalyanHtml = safeKalyanList.map(k => `
         <div style="font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px;">
           <div style="display: flex; justify-content: space-between; font-weight: 600;">
             <span>${k.name} (${k.qty} dona)</span>
