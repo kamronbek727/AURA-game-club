@@ -5322,14 +5322,32 @@
 
         // 1. Cabins
         if (cabinsRes.data && cabinsRes.data.length > 0) {
-           cabins = cabinsRes.data.map(c => ({
-             id: c.id,
-             name: c.name,
-             type: c.type,
-             pricePerHour: c.price_per_hour,
-             status: c.status,
-             session: c.session
-           }));
+           cabins = cabinsRes.data.map(c => {
+             // img: Supabase'dagi image maydoni bo'sh bo'lsa, tur bo'yicha default rasm
+             const cabinImg = c.image || c.img || (
+               c.id === 'VIP' ? 'rasmlar/ps5.png' :
+               c.type === 'PS5' ? 'rasmlar/ps5.png' :
+               'rasmlar/ps4.png'
+             );
+             // subtitle: VIP bo'lsa 'VIP', aks holda 'Standart'
+             const cabinSubtitle = c.subtitle || (c.id === 'VIP' ? 'VIP' : 'Standart');
+
+             // CABINS_INITIAL'dan qo'shimcha maydonlarni olish (img, subtitle, name)
+             const initial = (typeof CABINS_INITIAL !== 'undefined')
+               ? CABINS_INITIAL.find(ci => ci.id === c.id)
+               : null;
+
+             return {
+               id: c.id,
+               name: c.name || (initial ? initial.name : c.id),
+               type: c.type,
+               subtitle: cabinSubtitle,
+               pricePerHour: c.price_per_hour,
+               status: c.status,
+               session: c.session,
+               img: cabinImg
+             };
+           });
         }
 
         // 2. Products
