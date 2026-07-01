@@ -5579,6 +5579,14 @@
       return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm";
     }
 
+    function getOrderDate(o) {
+      if (o.dateString) return o.dateString;
+      if (o.endTime) return o.endTime.split('T')[0];
+      if (o.created_at) return o.created_at.split('T')[0];
+      if (o.startTime) return o.startTime.split('T')[0];
+      return '';
+    }
+
     function formatTimeComponent(num) {
       return num.toString().padStart(2, '0');
     }
