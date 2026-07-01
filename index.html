@@ -6657,7 +6657,7 @@
     });
 
     // YAKUNLASH — Finalize session, save order, reset cabin
-    document.getElementById('btn-receipt-yakunlash').addEventListener('click', () => {
+    document.getElementById('btn-receipt-yakunlash').addEventListener('click', async () => {
       if (!pendingOrderRecord || !pendingCabinId) return;
 
       // Save order to history
@@ -6672,6 +6672,19 @@
 
       // Deduct product stock from inventory
       if (pendingOrderRecord.products && pendingOrderRecord.products.length > 0) {
+        // Avval bazadagi eng so'nggi stock ni tortib olamiz (boshqa adminlar aralashgan bo'lsa)
+        if (supabaseClient) {
+          try {
+            const { data: dbProducts } = await supabaseClient.from('products').select('id, stock');
+            if (dbProducts) {
+              dbProducts.forEach(dbP => {
+                const localP = PRODUCTS_LIST.find(pr => pr.id === dbP.id);
+                if (localP && dbP.stock !== undefined) localP.stock = dbP.stock;
+              });
+            }
+          } catch(e) { console.error(e); }
+        }
+
         pendingOrderRecord.products.forEach(p => {
           const originalProd = PRODUCTS_LIST.find(pr => pr.id === p.id);
           if (originalProd && originalProd.category !== 'Kalyanlar') {
