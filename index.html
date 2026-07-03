@@ -5148,6 +5148,12 @@
           return;
         }
 
+        // Cheklangan vaqt: endTime saqlanadi, tick kerak emas
+        if (c.session.endTime) {
+          auraClearCabinTimer(c.id);
+          return;
+        }
+
         const st = c.session.startTime;
         const existing = auraCabinTimers[c.id];
         const prevStart = prevStartTimes ? prevStartTimes[c.id] : undefined;
@@ -5158,7 +5164,8 @@
         } else if (prevStart !== st) {
           auraSetCabinTimer(c.id, st, 0);
         } else if (!existing) {
-          auraSetCabinTimer(c.id, st, 0);
+          const elapsed = Math.max(0, Math.floor((Date.now() - new Date(st).getTime()) / 1000));
+          auraSetCabinTimer(c.id, st, elapsed);
         }
       });
     }
@@ -5196,6 +5203,13 @@
       }
     }
 
+    let auraRemoteRefreshTimer = null;
+    const auraPendingRemoteKeys = new Set();
+    let auraPendingShiftPrevValue = null;
+    let auraLastLocalPushAt = 0;
+    const auraLastPushedValues = {};
+    let auraAppDataReady = false;
+
     function auraIsSyncKey(key) {
       return typeof key === 'string' && key.startsWith('aura_') && key !== 'aura_logged_role';
     }
@@ -5211,6 +5225,9 @@
 
       if (rows.length === 0) return;
 
+      rows.forEach(r => { auraLastPushedValues[r.key] = r.value; });
+      auraLastLocalPushAt = Date.now();
+
       const { error } = await supabaseClient
         .from('aura_store')
         .upsert(rows, { onConflict: 'key' });
@@ -5224,7 +5241,7 @@
       if (!auraRemoteSyncEnabled || auraSuppressRemotePush || !auraIsSyncKey(key)) return;
       auraPendingRemoteRows[key] = value;
       clearTimeout(auraRemoteFlushTimer);
-      auraRemoteFlushTimer = setTimeout(auraFlushRemoteStore, 250);
+      auraRemoteFlushTimer = setTimeout(auraFlushRemoteStore, 600);
     }
 
     async function auraPushAllLocalKeys() {
@@ -5249,56 +5266,110 @@
       }
     }
 
-    function auraRefreshAfterRemoteSync(changedKey, previousValue) {
-      const prevStartTimes = {};
-      cabins.forEach(c => {
-        if (c.session && c.session.startTime) prevStartTimes[c.id] = c.session.startTime;
-      });
+    function auraIsViewVisible(viewId) {
+      const el = document.getElementById(viewId);
+      return el && el.classList.contains('active');
+    }
 
-      let prevShiftStartTime = null;
-      if (changedKey === 'aura_active_shift' && previousValue) {
-        try {
-          prevShiftStartTime = JSON.parse(previousValue).startTime;
-        } catch (e) {}
-      }
-
-      if (typeof loadDB === 'function') loadDB();
-      if (typeof syncCabinsAndPricesWithAdmin === 'function') syncCabinsAndPricesWithAdmin();
-
-      auraReconcileCabinTimers(prevStartTimes);
-      if (changedKey === 'aura_active_shift') auraAnchorShiftFromRemote(prevShiftStartTime);
-
-      if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
-      if (typeof renderShiftToggle === 'function') renderShiftToggle();
-      if (typeof renderHistoryOrders === 'function') renderHistoryOrders();
-      if (typeof renderAdminShifts === 'function') renderAdminShifts();
-      if (typeof renderLogsList === 'function') renderLogsList();
-      if (typeof renderCabinsList === 'function') renderCabinsList();
-      if (typeof renderAdminProductsList === 'function') renderAdminProductsList();
-      if (typeof renderAdminHistoryOrders === 'function') renderAdminHistoryOrders();
-
+    function auraIsAdminVisible() {
       const adminApp = document.getElementById('admin-app');
-      if (adminApp && adminApp.style.display !== 'none' && typeof renderDashboard === 'function') {
-        renderDashboard();
+      return adminApp && adminApp.style.display !== 'none';
+    }
+
+    function auraFlushRemoteRefresh(changedKeys) {
+      const keys = new Set(changedKeys);
+      const needsCabins = keys.has('aura_cabins_data');
+      const needsPrices = keys.has('aura_prices_data');
+      const needsProducts = keys.has('aura_products_data');
+      const needsOrders = keys.has('aura_orders_data');
+      const needsShift = keys.has('aura_active_shift');
+      const needsLogs = keys.has('aura_logs_data');
+      const needsShiftsHistory = keys.has('aura_shifts_history');
+
+      const prevStartTimes = {};
+      if (needsCabins) {
+        cabins.forEach(c => {
+          if (c.session && c.session.startTime) prevStartTimes[c.id] = c.session.startTime;
+        });
       }
 
-      if (changedKey === 'aura_products_data' && typeof renderProductsList === 'function') {
-        renderProductsList();
+      auraSuppressRemotePush = true;
+      if (typeof loadDB === 'function') loadDB();
+      if (needsCabins || needsPrices || needsProducts) {
+        if (typeof syncCabinsAndPricesWithAdmin === 'function') syncCabinsAndPricesWithAdmin();
+      }
+      auraSuppressRemotePush = false;
+
+      if (needsCabins) {
+        auraReconcileCabinTimers(prevStartTimes);
+        if (auraIsViewVisible('view-kabinalar') && typeof renderCabinsGrid === 'function') {
+          renderCabinsGrid();
+        } else if (typeof updateTimers === 'function') {
+          updateTimers();
+        }
+        if (typeof auraSyncViewsAfterCabinsUpdate === 'function') auraSyncViewsAfterCabinsUpdate();
       }
 
-      if (changedKey === 'aura_cabins_data' && typeof auraSyncViewsAfterCabinsUpdate === 'function') {
-        auraSyncViewsAfterCabinsUpdate();
+      if (needsPrices && auraIsAdminVisible() && typeof loadPricesForm === 'function') {
+        loadPricesForm();
       }
 
-      if (changedKey === 'aura_active_shift') {
+      if (needsProducts) {
+        if (auraIsViewVisible('view-products') && typeof renderProductsList === 'function') renderProductsList();
+        if (auraIsAdminVisible() && typeof renderAdminProductsList === 'function') renderAdminProductsList();
+      }
+
+      if (needsOrders) {
+        if (auraIsViewVisible('view-buyurtmalar') && typeof renderHistoryOrders === 'function') renderHistoryOrders();
+        if (auraIsAdminVisible() && typeof renderAdminHistoryOrders === 'function') renderAdminHistoryOrders();
+      }
+
+      if (needsShift) {
+        if (auraPendingShiftPrevValue !== null) {
+          try {
+            auraAnchorShiftFromRemote(JSON.parse(auraPendingShiftPrevValue).startTime);
+          } catch (e) {
+            auraAnchorShiftFromRemote(null);
+          }
+        }
+        auraPendingShiftPrevValue = null;
         if (typeof renderShiftToggle === 'function') renderShiftToggle();
         if (typeof updateShiftTimer === 'function') updateShiftTimer();
       }
+
+      if (needsLogs && auraIsAdminVisible() && typeof renderLogsList === 'function') renderLogsList();
+      if (needsShiftsHistory && auraIsAdminVisible() && typeof renderAdminShifts === 'function') renderAdminShifts();
+
+      if (auraIsAdminVisible() && (needsOrders || needsCabins || needsProducts) && typeof renderDashboard === 'function') {
+        renderDashboard();
+      }
+    }
+
+    function auraScheduleRemoteRefresh(changedKey, previousValue) {
+      auraPendingRemoteKeys.add(changedKey);
+      if (changedKey === 'aura_active_shift') auraPendingShiftPrevValue = previousValue;
+      clearTimeout(auraRemoteRefreshTimer);
+      auraRemoteRefreshTimer = setTimeout(() => {
+        const batch = Array.from(auraPendingRemoteKeys);
+        auraPendingRemoteKeys.clear();
+        auraFlushRemoteRefresh(batch);
+      }, 300);
+    }
+
+    function auraRefreshAfterRemoteSync(changedKey, previousValue) {
+      auraScheduleRemoteRefresh(changedKey, previousValue);
     }
 
     function auraApplyRemoteRow(key, value) {
       if (!auraIsSyncKey(key)) return;
-      if (localStorage.getItem(key) === value) return;
+
+      const normalizedValue = value == null ? '' : String(value);
+      const currentValue = localStorage.getItem(key) || '';
+      if (currentValue === normalizedValue) return;
+
+      if (Date.now() - auraLastLocalPushAt < 2000 && auraLastPushedValues[key] === normalizedValue) {
+        return;
+      }
 
       const previousValue = localStorage.getItem(key);
 
@@ -5306,11 +5377,11 @@
       if (value == null || value === '') {
         localStorage.removeItem(key);
       } else {
-        localStorage.setItem(key, value);
+        localStorage.setItem(key, normalizedValue);
       }
       auraSuppressRemotePush = false;
 
-      auraRefreshAfterRemoteSync(key, previousValue);
+      auraScheduleRemoteRefresh(key, previousValue);
     }
 
     function auraPatchLocalStorageSync() {
@@ -5389,9 +5460,29 @@
 
     function ensureSupabaseSync() {
       if (!auraSupabaseInitPromise) {
-        auraSupabaseInitPromise = initSupabaseSync();
+        auraSupabaseInitPromise = initSupabaseSync().then(() => {
+          auraAppDataReady = true;
+        }).catch(err => {
+          console.error('Supabase init xatolik:', err);
+          auraAppDataReady = true;
+        });
       }
       return auraSupabaseInitPromise;
+    }
+
+    async function auraLoadAppData() {
+      if (typeof syncCabinsAndPricesWithAdmin === 'function') syncCabinsAndPricesWithAdmin();
+      if (typeof loadDB === 'function') loadDB();
+      if (typeof auraReconcileCabinTimers === 'function') auraReconcileCabinTimers();
+      if (typeof auraBindShiftTimer === 'function') auraBindShiftTimer();
+
+      const loggedRole = sessionStorage.getItem('aura_logged_role');
+      if (loggedRole === 'worker') {
+        if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
+        if (typeof renderShiftToggle === 'function') renderShiftToggle();
+      } else if (loggedRole === 'admin' && typeof renderDashboard === 'function') {
+        renderDashboard();
+      }
     }
 
     // Initial Constants
@@ -5534,14 +5625,20 @@
           if (p.stock === undefined) p.stock = 20;
           PRODUCTS_LIST.push(p);
         });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+        const productsJson = JSON.stringify(PRODUCTS_LIST);
+        if (localStorage.getItem('aura_products_data') !== productsJson) {
+          localStorage.setItem('aura_products_data', productsJson);
+        }
       } else {
         PRODUCTS_LIST.forEach(p => {
           if (p.stock === undefined) {
             p.stock = 20;
           }
         });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+        const productsJson = JSON.stringify(PRODUCTS_LIST);
+        if (localStorage.getItem('aura_products_data') !== productsJson) {
+          localStorage.setItem('aura_products_data', productsJson);
+        }
       }
 
       // Sync logs
@@ -5574,6 +5671,12 @@
       localStorage.setItem('aura_logs_data', JSON.stringify(logs));
     }
 
+    let saveDBDebounceTimer = null;
+    function saveDBCabinDebounced() {
+      clearTimeout(saveDBDebounceTimer);
+      saveDBDebounceTimer = setTimeout(saveDB, 500);
+    }
+
     // UTILITIES
     function formatMoney(amount) {
       return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm";
@@ -5595,18 +5698,24 @@
     function getSessionRemainingSeconds(session, cabinId) {
       if (!session || !session.endTime) return 0;
       const end = new Date(session.endTime).getTime();
-      const start = session.startTime ? new Date(session.startTime).getTime() : null;
-      if (start != null) {
-        const totalSecs = Math.max(0, Math.floor((end - start) / 1000));
-        return Math.max(0, totalSecs - getSessionElapsedSeconds(session, cabinId));
-      }
       return Math.max(0, Math.floor((end - Date.now()) / 1000));
     }
 
     function getSessionElapsedSeconds(session, cabinId) {
       if (!session || !session.startTime || !cabinId) return 0;
+
+      if (session.endTime) {
+        const start = new Date(session.startTime).getTime();
+        const end = new Date(session.endTime).getTime();
+        const now = Date.now();
+        const effectiveNow = now > end ? end : now;
+        return Math.max(0, Math.floor((effectiveNow - start) / 1000));
+      }
+
       const t = auraCabinTimers[cabinId];
-      if (!t || t.startTime !== session.startTime) return 0;
+      if (!t || t.startTime !== session.startTime) {
+        return Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000));
+      }
       return Math.max(0, t.elapsed + Math.floor((Date.now() - t.tickAt) / 1000));
     }
 
@@ -5974,7 +6083,11 @@
         durationMinutes: durationMinutes,
         products: []
       };
-      auraSetCabinTimer(cabin.id, startTimeISO, 0);
+      if (endTime) {
+        auraClearCabinTimer(cabin.id);
+      } else {
+        auraSetCabinTimer(cabin.id, startTimeISO, 0);
+      }
 
       saveDB();
       renderCabinsGrid();
@@ -6188,6 +6301,7 @@
         const now = auraNow();
         cabin.session.endTime = new Date(now.getTime() + extraMins * 60 * 1000).toISOString();
         cabin.session.durationMinutes = extraMins;
+        auraClearCabinTimer(cabin.id);
       }
       
       saveDB();
@@ -6262,8 +6376,10 @@
       if (!cabin || !cabin.session) return;
 
       if (editSessionMode === 'unlimited') {
+        const elapsed = getSessionElapsedSeconds(cabin.session, cabin.id);
         cabin.session.endTime = null;
         cabin.session.durationMinutes = null;
+        auraSetCabinTimer(cabin.id, cabin.session.startTime, elapsed);
       } else {
         const newTotalMins = parseInt(document.getElementById('edit-total-minutes').value, 10);
         if (isNaN(newTotalMins) || newTotalMins <= 0) {
@@ -6274,6 +6390,7 @@
         const start = new Date(cabin.session.startTime);
         cabin.session.durationMinutes = newTotalMins;
         cabin.session.endTime = new Date(start.getTime() + newTotalMins * 60 * 1000).toISOString();
+        auraClearCabinTimer(cabin.id);
       }
 
       saveDB();
@@ -6483,10 +6600,8 @@
         }
       }
 
-      saveDB();
+      saveDBCabinDebounced();
     }
-
-    function auraSyncCartFromActiveCabin() {
       if (activeCabinId == null) return;
 
       const cabin = cabins.find(c => c.id === activeCabinId);
@@ -7301,14 +7416,20 @@
           if (p.stock === undefined) p.stock = 20;
           PRODUCTS_LIST.push(p);
         });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+        const productsJson = JSON.stringify(PRODUCTS_LIST);
+        if (localStorage.getItem('aura_products_data') !== productsJson) {
+          localStorage.setItem('aura_products_data', productsJson);
+        }
       } else {
         PRODUCTS_LIST.forEach(p => {
           if (p.stock === undefined) {
             p.stock = 20;
           }
         });
-        localStorage.setItem('aura_products_data', JSON.stringify(PRODUCTS_LIST));
+        const productsJson = JSON.stringify(PRODUCTS_LIST);
+        if (localStorage.getItem('aura_products_data') !== productsJson) {
+          localStorage.setItem('aura_products_data', productsJson);
+        }
       }
     }
 
@@ -7394,7 +7515,9 @@
           
           document.getElementById('app').style.display = 'block';
           document.getElementById('admin-app').style.display = 'none';
-          
+
+          loadDB();
+          auraReconcileCabinTimers();
           renderCabinsGrid();
           showView('view-kabinalar');
           if (typeof renderShiftToggle === 'function') renderShiftToggle();
@@ -7413,7 +7536,8 @@
           // Switch to Admin App
           document.getElementById('app').style.display = 'none';
           document.getElementById('admin-app').style.display = 'flex';
-          
+
+          loadDB();
           // Trigger Admin Panel render
           if (typeof renderDashboard === 'function') {
             renderDashboard();
@@ -7453,15 +7577,12 @@
       }
     }
 
-    // APP STARTUP INITS
-    window.addEventListener('DOMContentLoaded', async () => {
-      await ensureSupabaseSync();
-      syncCabinsAndPricesWithAdmin();
-      loadDB();
-      auraReconcileCabinTimers();
-      auraBindShiftTimer();
+    // APP STARTUP INITS — UI darhol ishlaydi, Supabase fonda yuklanadi
+    window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       startTimerLoop();
+
+      ensureSupabaseSync().then(() => auraLoadAppData());
 
       // Bind return button click event
       const returnBtn = document.getElementById('btn-back-to-admin');
@@ -8496,8 +8617,6 @@
 
     // Module Initializer router
     function initViewModule(viewId) {
-      loadDB();
-      auraReconcileCabinTimers();
       switch (viewId) {
         case 'dashboard':
           renderDashboard();
@@ -10205,11 +10324,7 @@
 
     // ── PAGE LOAD INITIALIZER ──
     async function initializePage() {
-      await ensureSupabaseSync();
       console.log("AuraUI: Initializing page components...");
-      loadDB();
-      auraReconcileCabinTimers();
-      auraBindShiftTimer();
       AuraUI.initAll();
       
       // Set current date on header
