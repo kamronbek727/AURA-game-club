@@ -4156,6 +4156,23 @@
           <button class="btn-details-action" id="btn-details-add-time">Vaqt qo'shish</button>
         </div>
 
+        <!-- Payment Status card -->
+        <div class="details-payment-section" style="background: #ffffff; border-radius: 24px; padding: 18px 24px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02); border: 1px solid #f1f5f9; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #f1f5f9; color: #475569;" id="details-payment-icon-bg">
+              <i data-lucide="credit-card" style="width: 20px; height: 20px;"></i>
+            </div>
+            <div>
+              <div style="font-size: 13px; font-weight: 500; color: #6b7280;">To'lov holati</div>
+              <div style="font-size: 15px; font-weight: 700;" id="details-payment-status-text">To'lanmagan</div>
+            </div>
+          </div>
+          <label class="checkbox-group" style="padding: 0;">
+            <input type="checkbox" id="details-payment-checkbox">
+            <span class="checkbox-label" style="font-size: 14px; font-weight: 600;">Pul to'landi</span>
+          </label>
+        </div>
+
         <!-- Order details block -->
         <div class="details-order-section">
           <div class="order-section-header">
@@ -4331,6 +4348,12 @@
               <div id="start-calculated-time" style="font-size: 24px; font-weight: 700; color: #3b82f6;">00:00:00</div>
             </div>
           </div>
+          <div class="form-group" style="margin-top: 15px;">
+            <label class="checkbox-group">
+              <input type="checkbox" id="start-session-paid">
+              <span class="checkbox-label" style="font-size: 15px; font-weight: 600;">Pul to'landi (To'lov qilindi)</span>
+            </label>
+          </div>
         </div>
         <div class="modal-actions">
           <button class="btn-primary" id="btn-submit-start-session">Sessiyani boshlash</button>
@@ -4407,6 +4430,12 @@
               <input type="number" id="edit-total-minutes" class="form-input" placeholder="Jami sessiya daqiqalari">
               <small style="color: #6b7280; font-size: 11px;">Joriy sessiya umumiy davomiyligi o'zgartiriladi</small>
             </div>
+          </div>
+          <div class="form-group" style="margin-top: 15px;">
+            <label class="checkbox-group">
+              <input type="checkbox" id="edit-session-paid">
+              <span class="checkbox-label" style="font-size: 15px; font-weight: 600;">Pul to'landi (To'lov qilindi)</span>
+            </label>
           </div>
         </div>
         <div class="modal-actions">
@@ -6142,6 +6171,19 @@
 
         const isBosh = c.status === "Bo'sh";
 
+        let paymentBadgeHTML = '';
+        if (c.status === "O'yinda" && c.session) {
+          const isPaid = !!c.session.isPaid;
+          const bg = isPaid ? '#eefdf4' : '#fef2f2';
+          const fg = isPaid ? '#10b981' : '#ef4444';
+          const text = isPaid ? "To'langan" : "To'lanmagan";
+          paymentBadgeHTML = `
+            <div class="cabin-payment-badge" style="background: ${bg}; color: ${fg}; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px; margin-top: -6px; margin-bottom: 8px;">
+              ${text}
+            </div>
+          `;
+        }
+
         card.innerHTML = `
           <div class="cabin-card-header">
             <span class="cabin-number">${c.id === 'VIP' ? 'VIP' : c.id}</span>
@@ -6155,6 +6197,7 @@
           </div>
           <div class="cabin-console-name">${c.type}</div>
           <div class="cabin-console-type">${c.subtitle}</div>
+          ${paymentBadgeHTML}
           <div id="cabin-timer-container-${c.id}" style="width: 100%; display: flex; justify-content: center;">
             ${timerHTML}
           </div>
@@ -6217,6 +6260,7 @@
       // Clear input values
       document.getElementById('start-money-amount').value = '';
       document.getElementById('start-calculated-time').innerText = '00:00:00';
+      document.getElementById('start-session-paid').checked = false;
 
       // Open Modal
       document.getElementById('modal-start-session').classList.add('active');
@@ -6289,12 +6333,15 @@
         endTime = new Date(startMs + totalMinutes * 60 * 1000).toISOString();
       }
 
+      const isPaid = document.getElementById('start-session-paid').checked;
+
       cabin.status = "O'yinda";
       cabin.session = {
         startTime: startTimeISO,
         endTime: endTime,
         durationMinutes: durationMinutes,
-        products: []
+        products: [],
+        isPaid: isPaid
       };
       if (endTime) {
         auraClearCabinTimer(cabin.id);
@@ -6417,6 +6464,25 @@
       // Calculate play amount + total sum
       const calc = calculateSessionCosts(cabin);
       document.getElementById('details-total-val').innerText = formatMoney(calc.totalAmount);
+
+      // Update Payment Status card
+      const paymentBg = document.getElementById('details-payment-icon-bg');
+      const paymentText = document.getElementById('details-payment-status-text');
+      const paymentCheckbox = document.getElementById('details-payment-checkbox');
+
+      if (cabin.session.isPaid) {
+        paymentBg.style.background = '#ecfdf5';
+        paymentBg.style.color = '#10b981';
+        paymentText.innerText = "To'langan";
+        paymentText.style.color = '#10b981';
+        paymentCheckbox.checked = true;
+      } else {
+        paymentBg.style.background = '#fef2f2';
+        paymentBg.style.color = '#ef4444';
+        paymentText.innerText = "To'lanmagan";
+        paymentText.style.color = '#ef4444';
+        paymentCheckbox.checked = false;
+      }
     }
 
     // COST CALCULATION ENGINE
@@ -6463,6 +6529,35 @@
         playedMinutes: playedMinutes
       };
     }
+
+    // Details page payment status checkbox listener
+    document.getElementById('details-payment-checkbox').addEventListener('change', (e) => {
+      const cabin = cabins.find(c => c.id === activeCabinId);
+      if (!cabin || !cabin.session) return;
+      
+      cabin.session.isPaid = e.target.checked;
+      
+      // Update details view immediately
+      const paymentBg = document.getElementById('details-payment-icon-bg');
+      const paymentText = document.getElementById('details-payment-status-text');
+      if (cabin.session.isPaid) {
+        paymentBg.style.background = '#ecfdf5';
+        paymentBg.style.color = '#10b981';
+        paymentText.innerText = "To'langan";
+        paymentText.style.color = '#10b981';
+      } else {
+        paymentBg.style.background = '#fef2f2';
+        paymentBg.style.color = '#ef4444';
+        paymentText.innerText = "To'lanmagan";
+        paymentText.style.color = '#ef4444';
+      }
+      
+      saveDB();
+      renderCabinsGrid();
+      if (typeof renderDashboard === 'function') {
+        renderDashboard();
+      }
+    });
 
     // VAQT QO'SHISH MODAL EVENT
     document.getElementById('btn-details-add-time').addEventListener('click', () => {
@@ -6560,6 +6655,8 @@
         setEditSessionMode('unlimited');
       }
 
+      document.getElementById('edit-session-paid').checked = !!cabin.session.isPaid;
+
       document.getElementById('modal-edit-session').classList.add('active');
     });
 
@@ -6588,6 +6685,8 @@
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
+      cabin.session.isPaid = document.getElementById('edit-session-paid').checked;
+
       if (editSessionMode === 'unlimited') {
         const elapsed = getSessionElapsedSeconds(cabin.session, cabin.id);
         cabin.session.endTime = null;
@@ -6608,6 +6707,11 @@
 
       saveDB();
       updateTimers();
+      updateActiveCabinDetailsView();
+      renderCabinsGrid();
+      if (typeof renderDashboard === 'function') {
+        renderDashboard();
+      }
       closeAllModals();
     });
 
@@ -6866,6 +6970,10 @@
       if (!cabin || !cabin.session) return;
 
       const calc = calculateSessionCosts(cabin);
+      const isPaid = !!cabin.session.isPaid;
+      const paymentStatusText = isPaid 
+        ? `<span style="font-weight: 700; color: #10b981;">To'langan (Oldindan)</span>` 
+        : `<span style="font-weight: 700; color: #ef4444;">To'lanmagan</span>`;
 
       const checkoutBody = document.getElementById('checkout-bill-body');
       checkoutBody.innerHTML = `
@@ -6873,6 +6981,10 @@
           <div style="display: flex; justify-content: space-between;">
             <span style="font-weight: 600; color: #4b5563;">Kabina:</span>
             <span style="font-weight: 700; color: #1f2937;">${cabin.name} (${cabin.type})</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="font-weight: 600; color: #4b5563;">To'lov holati:</span>
+            ${paymentStatusText}
           </div>
           <div style="display: flex; justify-content: space-between;">
             <span style="font-weight: 600; color: #4b5563;">O'ynalgan vaqt:</span>
@@ -6888,8 +7000,8 @@
             ${cabin.session.products && cabin.session.products.length > 0
           ? cabin.session.products.map(p => `
                     <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4b5563;">
-                      <span>${p.name} (${p.quantity} ta)</span>
-                      <span>${formatMoney(p.price * p.quantity)}</span>
+                       <span>${p.name} (${p.quantity} ta)</span>
+                       <span>${formatMoney(p.price * p.quantity)}</span>
                     </div>
                   `).join('')
           : '<div style="font-size: 12px; color: #9ca3af; font-style: italic;">Mahsulotlar yo\'q</div>'
@@ -8904,17 +9016,22 @@
 
         let badgeHTML = '';
         if (c.status === "O'yinda") {
+          const isPaid = c.session && c.session.isPaid;
+          const paidBadgeHTML = isPaid 
+            ? `<span class="badge badge-green" style="margin-left: 6px;">To'langan</span>` 
+            : `<span class="badge badge-red" style="margin-left: 6px;">To'lanmagan</span>`;
+
           if (c.session && c.session.endTime) {
             // Limited session
             const diffMs = getSessionRemainingSeconds(c.session, c.id) * 1000;
             if (diffMs <= 0) {
-              badgeHTML = `<span class="badge badge-red">Tugadi</span>`;
+              badgeHTML = `<div style="display: flex; align-items: center;"><span class="badge badge-red">Tugadi</span>${paidBadgeHTML}</div>`;
             } else {
               const leftMins = Math.ceil(diffMs / (1000 * 60));
-              badgeHTML = `<span class="badge badge-blue">O'yinda (${leftMins} m qoldi)</span>`;
+              badgeHTML = `<div style="display: flex; align-items: center;"><span class="badge badge-blue">O'yinda (${leftMins} m qoldi)</span>${paidBadgeHTML}</div>`;
             }
           } else {
-            badgeHTML = `<span class="badge badge-blue">Cheksiz (O'yinda)</span>`;
+            badgeHTML = `<div style="display: flex; align-items: center;"><span class="badge badge-blue">Cheksiz</span>${paidBadgeHTML}</div>`;
           }
         } else {
           badgeHTML = `<span class="badge badge-green">Bo'sh</span>`;
