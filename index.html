@@ -306,6 +306,32 @@
       }
     }
 
+    @keyframes pulse-red {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+      }
+      70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+      }
+    }
+
+    @keyframes toast-slide-in {
+      from {
+        transform: translateX(120%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
     /* Generic Card Styles (Apple style) */
     .card {
       background: var(--card-bg);
@@ -4094,7 +4120,11 @@
             Ish vaqti: 00:00:00
           </div>
         </div>
-        <div class="header-right">
+        <div class="header-right" style="display: flex; align-items: center; gap: 8px;">
+          <!-- Alarm Mute Button -->
+          <button id="btn-mute-alarm" class="icon-btn" style="display: none; background: #fee2e2; color: #ef4444; border: none; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; align-items: center; justify-content: center; transition: all 0.3s;" title="Mute Alarm">
+            <i data-lucide="bell" style="width: 20px; height: 20px;"></i>
+          </button>
         </div>
       </div>
 
@@ -5892,6 +5922,179 @@
     // Timer Interval Reference
     let globalTimerInterval = null;
 
+    // Alarm audio and acknowledgment state
+    const alarmAudio = new Audio('budilnik.mp3');
+    alarmAudio.loop = true;
+    let acknowledgedAlarms = new Set();
+    let shownNotifications = new Set();
+
+    // Premium Apple-style slide-in notifications
+    function showAuraNotification(message, sessionKey) {
+      let container = document.getElementById('aura-toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'aura-toast-container';
+        container.style.cssText = `
+          position: fixed;
+          top: 24px;
+          right: 24px;
+          z-index: 99999;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          max-width: 380px;
+          width: calc(100% - 48px);
+          pointer-events: none;
+        `;
+        document.body.appendChild(container);
+      }
+
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(20px) saturate(190%);
+        -webkit-backdrop-filter: blur(20px) saturate(190%);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+        border-radius: 16px;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        pointer-events: auto;
+        transform: translateX(120%);
+        animation: toast-slide-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      `;
+
+      const content = document.createElement('div');
+      content.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      `;
+
+      const iconWrap = document.createElement('div');
+      iconWrap.style.cssText = `
+        width: 36px;
+        height: 36px;
+        background: #fee2e2;
+        color: #ef4444;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      `;
+      iconWrap.innerHTML = '<i data-lucide="bell" style="width: 18px; height: 18px;"></i>';
+
+      const textWrap = document.createElement('div');
+      textWrap.style.cssText = `
+        display: flex;
+        flex-direction: column;
+      `;
+
+      const title = document.createElement('span');
+      title.innerText = 'Diqqat!';
+      title.style.cssText = `
+        font-size: 11px;
+        font-weight: 800;
+        color: #ef4444;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      `;
+
+      const msgText = document.createElement('span');
+      msgText.innerText = message;
+      msgText.style.cssText = `
+        font-size: 14px;
+        font-weight: 600;
+        color: #1e293b;
+        margin-top: 2px;
+      `;
+
+      textWrap.appendChild(title);
+      textWrap.appendChild(msgText);
+
+      // Inline "Budilnikni o'chirish" button if sessionKey is provided
+      if (sessionKey) {
+        const muteActionBtn = document.createElement('button');
+        muteActionBtn.innerText = "Budilnikni o'chirish";
+        muteActionBtn.style.cssText = `
+          background: #fee2e2;
+          color: #ef4444;
+          border: none;
+          border-radius: 8px;
+          padding: 6px 12px;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          margin-top: 6px;
+          align-self: flex-start;
+          transition: all 0.2s;
+        `;
+        muteActionBtn.addEventListener('mouseenter', () => {
+          muteActionBtn.style.background = '#fecaca';
+        });
+        muteActionBtn.addEventListener('mouseleave', () => {
+          muteActionBtn.style.background = '#fee2e2';
+        });
+        muteActionBtn.addEventListener('click', () => {
+          acknowledgedAlarms.add(sessionKey);
+          updateTimers();
+          muteActionBtn.innerText = "O'chirildi";
+          muteActionBtn.style.background = '#e2e8f0';
+          muteActionBtn.style.color = '#64748b';
+          muteActionBtn.style.cursor = 'default';
+          muteActionBtn.disabled = true;
+        });
+        textWrap.appendChild(muteActionBtn);
+      }
+
+      content.appendChild(iconWrap);
+      content.appendChild(textWrap);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.style.cssText = `
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #94a3b8;
+        padding: 6px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      `;
+      closeBtn.innerHTML = '<i data-lucide="x" style="width: 16px; height: 16px;"></i>';
+
+      const dismissToast = () => {
+        toast.style.transform = 'translateX(120%)';
+        toast.style.opacity = '0';
+        setTimeout(() => {
+          toast.remove();
+          if (container.children.length === 0) {
+            container.remove();
+          }
+        }, 500);
+      };
+
+      closeBtn.addEventListener('click', dismissToast);
+      toast.appendChild(content);
+      toast.appendChild(closeBtn);
+      container.appendChild(toast);
+
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons({
+          attrs: { class: 'lucide' },
+          nameAttr: 'data-lucide'
+        });
+      }
+
+      setTimeout(dismissToast, 12000);
+    }
+
     // Database load/save helper
     function loadDB() {
       // Sync prices
@@ -6137,6 +6340,8 @@
     function updateTimers() {
       let hasActive = false;
       let needGridRefresh = false;
+      let alarmRequired = false;
+      let activeExpiredSessions = [];
 
       cabins.forEach(c => {
         if (c.status === "O'yinda" && c.session) {
@@ -6155,6 +6360,17 @@
               dotClass = 'dot-band';
               statusText = `Tugadi`;
               timerHTML = `<div class="cabin-timer timer-overdue">00:00:00</div>`;
+
+              const sessionKey = c.id + '_' + c.session.startTime;
+              activeExpiredSessions.push(sessionKey);
+              if (!acknowledgedAlarms.has(sessionKey)) {
+                alarmRequired = true;
+              }
+
+              if (!shownNotifications.has(sessionKey)) {
+                shownNotifications.add(sessionKey);
+                showAuraNotification(c.name + " vaqti tugadi!", sessionKey);
+              }
             } else {
               const timeStr = formatSecondsAsHMS(secondsLeft);
 
@@ -6196,6 +6412,59 @@
           }
         }
       });
+
+      // Clean up acknowledgedAlarms & shownNotifications: remove keys that are no longer active/expired
+      acknowledgedAlarms.forEach(key => {
+        if (!activeExpiredSessions.includes(key)) {
+          acknowledgedAlarms.delete(key);
+        }
+      });
+      shownNotifications.forEach(key => {
+        if (!activeExpiredSessions.includes(key)) {
+          shownNotifications.delete(key);
+        }
+      });
+
+      // Update alarm sound and mute button UI
+      const muteBtn = document.getElementById('btn-mute-alarm');
+      if (activeExpiredSessions.length > 0) {
+        if (muteBtn) {
+          muteBtn.style.display = 'flex';
+          if (!alarmRequired) {
+            muteBtn.style.animation = 'none';
+            muteBtn.style.background = '#e2e8f0';
+            muteBtn.style.color = '#64748b';
+            muteBtn.innerHTML = '<i data-lucide="bell-off" style="width: 20px; height: 20px;"></i>';
+          } else {
+            muteBtn.style.animation = 'pulse-red 1.5s infinite';
+            muteBtn.style.background = '#fee2e2';
+            muteBtn.style.color = '#ef4444';
+            muteBtn.innerHTML = '<i data-lucide="bell" style="width: 20px; height: 20px;"></i>';
+          }
+          if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+          }
+        }
+
+        if (alarmRequired) {
+          if (alarmAudio.paused) {
+            alarmAudio.play().catch(e => console.log("Alarm play failed:", e));
+          }
+        } else {
+          if (!alarmAudio.paused) {
+            alarmAudio.pause();
+            alarmAudio.currentTime = 0;
+          }
+        }
+      } else {
+        if (muteBtn) {
+          muteBtn.style.display = 'none';
+        }
+        if (!alarmAudio.paused) {
+          alarmAudio.pause();
+          alarmAudio.currentTime = 0;
+        }
+      }
 
       if (hasActive) {
         updateActiveCabinDetailsView();
@@ -8333,6 +8602,23 @@
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       startTimerLoop();
+
+      // Bind mute alarm button click event
+      const muteBtn = document.getElementById('btn-mute-alarm');
+      if (muteBtn) {
+        muteBtn.addEventListener('click', () => {
+          cabins.forEach(c => {
+            if (c.status === "O'yinda" && c.session && c.session.endTime) {
+              const secondsLeft = getSessionRemainingSeconds(c.session, c.id);
+              if (secondsLeft <= 0) {
+                const sessionKey = c.id + '_' + c.session.startTime;
+                acknowledgedAlarms.add(sessionKey);
+              }
+            }
+          });
+          updateTimers();
+        });
+      }
 
       ensureSupabaseSync().then(() => auraLoadAppData());
 
