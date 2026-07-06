@@ -56,6 +56,18 @@
       overflow: hidden;
     }
 
+    @media (max-width: 1024px) {
+      .admin-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100% !important;
+      }
+    }
+
     /* Sidebar Styling */
     .sidebar {
       width: var(--sidebar-width);
@@ -4153,7 +4165,10 @@
             <div class="details-timer-label" id="details-timer-label">Qolgan vaqt</div>
           </div>
 
-          <button class="btn-details-action" id="btn-details-add-time">Vaqt qo'shish</button>
+          <div style="display: flex; gap: 10px; width: 100%;">
+            <button class="btn-details-action" id="btn-details-add-time" style="flex: 1;">Vaqt qo'shish</button>
+            <button class="btn-details-action" id="btn-details-transfer-cabin" style="flex: 1; background: #f5f3ff; color: #7c3aed;">Kabinani o'tkazish</button>
+          </div>
         </div>
 
         <!-- Payment Status card -->
@@ -4551,6 +4566,30 @@
       </div>
     </div>
 
+    <!-- TRANSFER CABIN MODAL -->
+    <div class="modal-overlay" id="modal-transfer-cabin">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">Kabinani o'tkazish</h3>
+          <button class="icon-btn btn-close-modal"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">
+            Hozirgi kabina: <strong id="transfer-source-name" style="color: var(--text-main);">-</strong>
+          </div>
+          <div style="font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">
+            O'tkaziladigan bo'sh kabinani tanlang:
+          </div>
+          <div id="transfer-empty-cabins-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; padding-right: 6px; margin-top: 10px;">
+            <!-- Free cabins list will be rendered dynamically via JS -->
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button class="btn-secondary btn-close-modal" style="width: 100%;">Bekor qilish</button>
+        </div>
+      </div>
+    </div>
+
     <!-- CHECKOUT BILL / PAYMENT MODAL -->
     <div class="modal-overlay" id="modal-checkout-bill">
       <div class="modal-content">
@@ -4561,12 +4600,63 @@
         <div class="modal-body" id="checkout-bill-body">
           <!-- bill breakdown via JS -->
         </div>
-        <div class="modal-actions">
+
+        <!-- Step 2: Payment Method Selection (initially hidden) -->
+        <div id="checkout-payment-method-area" style="display: none; padding: 15px 0;">
+          <h4 style="font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 16px; text-align: center;">To'lov turini tanlang</h4>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+            <button type="button" id="btn-pay-cash" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px 8px; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-color); cursor: pointer; transition: all 0.2s;">
+              <i data-lucide="banknote" style="width: 24px; height: 24px; color: #10b981;"></i>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">Naqd</span>
+            </button>
+            <button type="button" id="btn-pay-card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px 8px; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-color); cursor: pointer; transition: all 0.2s;">
+              <i data-lucide="credit-card" style="width: 24px; height: 24px; color: #3b82f6;"></i>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">Karta</span>
+            </button>
+            <button type="button" id="btn-pay-mixed" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px 8px; border: 2px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-color); cursor: pointer; transition: all 0.2s;">
+              <i data-lucide="coins" style="width: 24px; height: 24px; color: #a855f7;"></i>
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">Aralash</span>
+            </button>
+          </div>
+          
+          <!-- Mixed payment details section -->
+          <div id="mixed-payment-details" style="display: none; background: #faf5ff; border: 1px solid #f3e8ff; border-radius: var(--radius-md); padding: 16px; margin-top: 16px;">
+            <div style="font-size: 13px; font-weight: 600; color: #701a75; margin-bottom: 12px; text-align: center;">Naqd va Karta summalarini kiriting</div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Naqd to'lov (so'm)</label>
+                <input type="number" id="input-pay-cash-amount" class="form-input" placeholder="0" style="width: 100%; font-size: 16px; font-weight: 700; padding: 10px 12px; text-align: right;">
+              </div>
+              <div>
+                <label style="font-size: 12px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Karta orqali to'lov (so'm)</label>
+                <input type="number" id="input-pay-card-amount" class="form-input" placeholder="0" style="width: 100%; font-size: 16px; font-weight: 700; padding: 10px 12px; text-align: right;">
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #e9d5ff; padding-top: 10px; font-size: 14px;">
+                <span style="font-weight: 600; color: var(--text-muted);">Jami summa:</span>
+                <span id="label-pay-mixed-total" style="font-weight: 800; color: #701a75;">0 so'm</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px;">
+                <span style="font-weight: 600; color: var(--text-muted);">Kiritilgan jami:</span>
+                <span id="label-pay-mixed-entered" style="font-weight: 800; color: #10b981;">0 so'm</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions" id="checkout-modal-actions-step1">
           <button class="btn-primary" id="btn-confirm-payment"
-            style="background: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);">
+            style="background: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); width: 100%;">
             To'lovni qabul qilish
           </button>
-          <button class="btn-secondary btn-close-modal">Orqaga qaytish</button>
+          <button class="btn-secondary btn-close-modal" style="width: 100%;">Orqaga qaytish</button>
+        </div>
+
+        <div class="modal-actions" id="checkout-modal-actions-step2" style="display: none;">
+          <button class="btn-primary" id="btn-submit-payment-method"
+            style="background: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); width: 100%;">
+            Tasdiqlash
+          </button>
+          <button class="btn-secondary" id="btn-back-to-step1" style="width: 100%;">Orqaga</button>
         </div>
       </div>
     </div>
@@ -4952,10 +5042,18 @@
             </div>
           </div>
 
-          <div class="revenue-kpi-row">
+          <div class="revenue-kpi-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px;">
             <div class="revenue-kpi-card">
               <span class="rev-label">Umumiy tushum</span>
               <h2 class="rev-value" id="revenue-total-val">0 so'm</h2>
+            </div>
+            <div class="revenue-kpi-card" style="border-left: 4px solid #10b981;">
+              <span class="rev-label">Naqd tushum</span>
+              <h2 class="rev-value" id="revenue-cash-val">0 so'm</h2>
+            </div>
+            <div class="revenue-kpi-card" style="border-left: 4px solid #3b82f6;">
+              <span class="rev-label">Karta tushumi</span>
+              <h2 class="rev-value" id="revenue-card-val">0 so'm</h2>
             </div>
             <div class="revenue-kpi-card">
               <span class="rev-label">O'yinlardan tushum</span>
@@ -5021,6 +5119,20 @@
               <div class="kpi-info">
                 <span class="kpi-label">Qancha tushum bo'lgan</span>
                 <h3 class="kpi-value" id="stats-total-revenue">-</h3>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-icon icon-green"><i data-lucide="banknote"></i></div>
+              <div class="kpi-info">
+                <span class="kpi-label">Naqd tushum</span>
+                <h3 class="kpi-value" id="stats-total-cash">-</h3>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-icon icon-blue"><i data-lucide="credit-card"></i></div>
+              <div class="kpi-info">
+                <span class="kpi-label">Karta tushumi</span>
+                <h3 class="kpi-value" id="stats-total-card">-</h3>
               </div>
             </div>
             <div class="kpi-card">
@@ -5946,19 +6058,30 @@
     function getSessionElapsedSeconds(session, cabinId) {
       if (!session || !session.startTime || !cabinId) return 0;
 
+      let currentElapsed = 0;
       if (session.endTime) {
         const start = new Date(session.startTime).getTime();
         const end = new Date(session.endTime).getTime();
         const now = auraNow().getTime();
         const effectiveNow = now > end ? end : now;
-        return Math.max(0, Math.floor((effectiveNow - start) / 1000));
+        currentElapsed = Math.max(0, Math.floor((effectiveNow - start) / 1000));
+      } else {
+        const t = auraCabinTimers[cabinId];
+        if (!t || t.startTime !== session.startTime) {
+          currentElapsed = Math.max(0, Math.floor((auraNow().getTime() - new Date(session.startTime).getTime()) / 1000));
+        } else {
+          currentElapsed = Math.max(0, t.elapsed + Math.floor((Date.now() - t.tickAt) / 1000));
+        }
       }
 
-      const t = auraCabinTimers[cabinId];
-      if (!t || t.startTime !== session.startTime) {
-        return Math.max(0, Math.floor((auraNow().getTime() - new Date(session.startTime).getTime()) / 1000));
+      let previousElapsedSecs = 0;
+      if (session.transfers && session.transfers.length > 0) {
+        session.transfers.forEach(segment => {
+          previousElapsedSecs += segment.playedMinutes * 60;
+        });
       }
-      return Math.max(0, t.elapsed + Math.floor((Date.now() - t.tickAt) / 1000));
+
+      return currentElapsed + previousElapsedSecs;
     }
 
     function getShiftElapsedSeconds(startTime) {
@@ -6341,7 +6464,8 @@
         endTime: endTime,
         durationMinutes: durationMinutes,
         products: [],
-        isPaid: isPaid
+        isPaid: isPaid,
+        pricePerHour: cabin.pricePerHour
       };
       if (endTime) {
         auraClearCabinTimer(cabin.id);
@@ -6491,22 +6615,42 @@
 
       const now = auraNow();
       const start = new Date(cabin.session.startTime);
-      let playedMs = getSessionElapsedSeconds(cabin.session, cabin.id) * 1000;
+      let currentPlayedMs = now - start;
 
       // If limited session is finished, limit calculations to expected end time
       if (cabin.session.endTime) {
         const end = new Date(cabin.session.endTime);
         if (now > end) {
-          playedMs = end - start;
+          currentPlayedMs = end - start;
         }
       }
 
-      const playedMinutes = Math.max(1, Math.ceil(playedMs / (1000 * 60))); // charge at least 1 minute
+      let currentCabinPlayedMins = Math.max(0, Math.ceil(currentPlayedMs / 60000));
+      
+      let previousPlayedMins = 0;
+      let previousPlayCost = 0;
+      
+      if (cabin.session.transfers && cabin.session.transfers.length > 0) {
+        cabin.session.transfers.forEach(segment => {
+          previousPlayedMins += segment.playedMinutes;
+          previousPlayCost += segment.playedMinutes * (segment.pricePerHour / 60);
+        });
+      }
 
+      const totalPlayedMinutes = currentCabinPlayedMins + previousPlayedMins;
+      
+      // Ensure we charge at least 1 minute total if total played time is somehow 0
+      if (totalPlayedMinutes === 0) {
+        currentCabinPlayedMins = 1;
+      }
+      
+      const finalPlayedMinutes = Math.max(1, totalPlayedMinutes);
+      
       // Cabin play cost (calculated by minute)
-      const hourlyRate = cabin.pricePerHour;
+      const hourlyRate = cabin.session.pricePerHour !== undefined ? cabin.session.pricePerHour : cabin.pricePerHour;
       const minutePrice = hourlyRate / 60;
-      const playAmount = Math.round(minutePrice * playedMinutes);
+      const currentPlayCost = currentCabinPlayedMins * minutePrice;
+      const playAmount = Math.round(currentPlayCost + previousPlayCost);
 
       // Products cost
       let productsAmount = 0;
@@ -6526,7 +6670,7 @@
         totalAmount: playAmount + productsAmount,
         adminProductsAmount: adminProductsAmount,
         adminTotalAmount: playAmount + adminProductsAmount,
-        playedMinutes: playedMinutes
+        playedMinutes: finalPlayedMinutes
       };
     }
 
@@ -6559,6 +6703,149 @@
       }
     });
 
+    // CABIN TRANSFER MODAL EVENTS & LOGIC
+    function openTransferCabinModal() {
+      const sourceCabin = cabins.find(c => c.id === activeCabinId);
+      if (!sourceCabin || !sourceCabin.session) return;
+
+      document.getElementById('transfer-source-name').innerText = `${sourceCabin.name} (${sourceCabin.type})`;
+      
+      const listContainer = document.getElementById('transfer-empty-cabins-list');
+      listContainer.innerHTML = '';
+
+      const emptyCabins = cabins.filter(c => c.status === "Bo'sh" && c.id !== sourceCabin.id);
+
+      if (emptyCabins.length === 0) {
+        listContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; font-style: italic; padding: 20px 0;">Bo'sh kabinalar topilmadi</div>`;
+      } else {
+        emptyCabins.forEach(targetCabin => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.style.width = '100%';
+          btn.style.padding = '12px 16px';
+          btn.style.border = '1px solid var(--border-color)';
+          btn.style.borderRadius = '12px';
+          btn.style.background = 'var(--bg-color)';
+          btn.style.textAlign = 'left';
+          btn.style.cursor = 'pointer';
+          btn.style.display = 'flex';
+          btn.style.justifyContent = 'space-between';
+          btn.style.alignItems = 'center';
+          btn.style.transition = 'all 0.2s';
+
+          // Hover/active styles
+          btn.addEventListener('mouseenter', () => {
+            btn.style.borderColor = 'var(--primary-color)';
+            btn.style.background = '#eff6ff';
+          });
+          btn.addEventListener('mouseleave', () => {
+            btn.style.borderColor = 'var(--border-color)';
+            btn.style.background = 'var(--bg-color)';
+          });
+
+          const rateStr = formatMoney(targetCabin.pricePerHour) + '/soat';
+          btn.innerHTML = `
+            <div>
+              <strong style="color: var(--text-main); font-size: 14px;">${targetCabin.name}</strong>
+              <span style="color: var(--text-muted); font-size: 12px; margin-left: 6px;">(${targetCabin.type})</span>
+            </div>
+            <span style="color: var(--primary-color); font-size: 13px; font-weight: 700;">${rateStr}</span>
+          `;
+
+          btn.addEventListener('click', () => {
+            if (confirm(`${sourceCabin.name} dagi sessiyani ${targetCabin.name} ga o'tkazishni tasdiqlaysizmi?\n(Sessiya narxi soatiga ${formatMoney(sourceCabin.session.pricePerHour || sourceCabin.pricePerHour)} saqlanadi)`)) {
+              performCabinTransfer(sourceCabin.id, targetCabin.id);
+            }
+          });
+
+          listContainer.appendChild(btn);
+        });
+      }
+
+      document.getElementById('modal-transfer-cabin').classList.add('active');
+    }
+
+    function performCabinTransfer(sourceId, targetId) {
+      const sourceCabin = cabins.find(c => c.id === sourceId);
+      const targetCabin = cabins.find(c => c.id === targetId);
+
+      if (!sourceCabin || !targetCabin || !sourceCabin.session) return;
+
+      const now = auraNow();
+      const startTime = new Date(sourceCabin.session.startTime).getTime();
+      
+      // Calculate elapsed minutes in the current segment
+      const maxAllowedMs = sourceCabin.session.endTime ? (new Date(sourceCabin.session.endTime) - startTime) : Infinity;
+      const elapsedMs = Math.min(now.getTime() - startTime, maxAllowedMs);
+      const elapsedMinutes = Math.max(0, Math.floor(elapsedMs / 60000));
+
+      const preservedPrice = sourceCabin.session.pricePerHour !== undefined 
+        ? sourceCabin.session.pricePerHour 
+        : sourceCabin.pricePerHour;
+
+      const segment = {
+        cabinId: sourceCabin.id,
+        cabinName: sourceCabin.name,
+        type: sourceCabin.type,
+        pricePerHour: preservedPrice,
+        playedMinutes: elapsedMinutes
+      };
+
+      const transfers = sourceCabin.session.transfers ? [...sourceCabin.session.transfers, segment] : [segment];
+
+      // Prepare target session
+      targetCabin.status = "O'yinda";
+      targetCabin.session = {
+        ...sourceCabin.session,
+        startTime: now.toISOString(),
+        endTime: null,
+        durationMinutes: null,
+        pricePerHour: targetCabin.pricePerHour, // Use target cabin rate going forward
+        transfers: transfers
+      };
+
+      // For limited/prepaid sessions, recalculate duration and endTime
+      if (sourceCabin.session.endTime) {
+        const remainingMinutes = Math.max(0, (sourceCabin.session.durationMinutes || 0) - elapsedMinutes);
+        const remainingMoney = (remainingMinutes / 60) * preservedPrice;
+        
+        // Convert to target cabin duration (minutes)
+        const targetDuration = (remainingMoney / targetCabin.pricePerHour) * 60;
+        
+        targetCabin.session.durationMinutes = targetDuration;
+        targetCabin.session.endTime = new Date(now.getTime() + targetDuration * 60 * 1000).toISOString();
+      }
+
+      // Clear source cabin
+      sourceCabin.status = "Bo'sh";
+      sourceCabin.session = null;
+
+      // Sync and save
+      saveDB();
+      if (typeof auraReconcileCabinTimers === 'function') {
+        auraReconcileCabinTimers();
+      }
+      if (typeof updateTimers === 'function') {
+        updateTimers();
+      }
+      if (typeof renderCabinsGrid === 'function') {
+        renderCabinsGrid();
+      }
+      if (typeof renderDashboard === 'function') {
+        renderDashboard();
+      }
+
+      addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', `Sessiya o'tkazildi: ${sourceCabin.name} -> ${targetCabin.name} (Soati: ${formatMoney(preservedPrice)} -> ${formatMoney(targetCabin.pricePerHour)})`);
+
+      // Switch detail view to target cabin
+      openCabinDetails(targetCabin.id);
+      closeAllModals();
+    }
+
+    document.getElementById('btn-details-transfer-cabin').addEventListener('click', () => {
+      openTransferCabinModal();
+    });
+
     // VAQT QO'SHISH MODAL EVENT
     document.getElementById('btn-details-add-time').addEventListener('click', () => {
       document.getElementById('add-money-amount').value = '';
@@ -6576,7 +6863,7 @@
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin) return;
 
-      const pricePerHour = cabin.pricePerHour;
+      const pricePerHour = cabin.session && cabin.session.pricePerHour !== undefined ? cabin.session.pricePerHour : cabin.pricePerHour;
       const totalMinutes = (amount / pricePerHour) * 60;
       const totalSeconds = Math.floor(totalMinutes * 60);
 
@@ -6596,7 +6883,7 @@
         return;
       }
 
-      const pricePerHour = cabin.pricePerHour;
+      const pricePerHour = cabin.session && cabin.session.pricePerHour !== undefined ? cabin.session.pricePerHour : cabin.pricePerHour;
       const extraMins = (amount / pricePerHour) * 60;
 
       if (cabin.session.endTime) {
@@ -6969,6 +7256,14 @@
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
+      // Reset Step 1 vs Step 2 views:
+      document.getElementById('checkout-bill-body').style.display = 'block';
+      document.getElementById('checkout-modal-actions-step1').style.display = 'flex';
+      document.getElementById('checkout-payment-method-area').style.display = 'none';
+      document.getElementById('checkout-modal-actions-step2').style.display = 'none';
+      selectedPaymentMethod = null;
+      resetPaymentButtons();
+
       const calc = calculateSessionCosts(cabin);
       const isPaid = !!cabin.session.isPaid;
       const paymentStatusText = isPaid 
@@ -7030,12 +7325,123 @@
     // Holds the pending order record until operator taps Yakunlash
     let pendingOrderRecord = null;
     let pendingCabinId = null;
+    let selectedPaymentMethod = null; // 'Naqd' | 'Karta' | 'Aralash'
 
+    function resetPaymentButtons() {
+      const btnCash = document.getElementById('btn-pay-cash');
+      const btnCard = document.getElementById('btn-pay-card');
+      const btnMixed = document.getElementById('btn-pay-mixed');
+      if (!btnCash || !btnCard || !btnMixed) return;
+      
+      btnCash.style.borderColor = 'var(--border-color)';
+      btnCash.style.background = 'var(--bg-color)';
+      btnCard.style.borderColor = 'var(--border-color)';
+      btnCard.style.background = 'var(--bg-color)';
+      btnMixed.style.borderColor = 'var(--border-color)';
+      btnMixed.style.background = 'var(--bg-color)';
+    }
+
+    function updateMixedPaymentSums() {
+      const cashVal = parseInt(document.getElementById('input-pay-cash-amount').value) || 0;
+      const cardVal = parseInt(document.getElementById('input-pay-card-amount').value) || 0;
+      document.getElementById('label-pay-mixed-entered').innerText = formatMoney(cashVal + cardVal);
+    }
+
+    document.getElementById('btn-pay-cash').addEventListener('click', () => {
+      resetPaymentButtons();
+      selectedPaymentMethod = 'Naqd';
+      const btn = document.getElementById('btn-pay-cash');
+      btn.style.borderColor = '#10b981';
+      btn.style.background = '#f0fdf4';
+      document.getElementById('mixed-payment-details').style.display = 'none';
+    });
+
+    document.getElementById('btn-pay-card').addEventListener('click', () => {
+      resetPaymentButtons();
+      selectedPaymentMethod = 'Karta';
+      const btn = document.getElementById('btn-pay-card');
+      btn.style.borderColor = '#3b82f6';
+      btn.style.background = '#eff6ff';
+      document.getElementById('mixed-payment-details').style.display = 'none';
+    });
+
+    document.getElementById('btn-pay-mixed').addEventListener('click', () => {
+      resetPaymentButtons();
+      selectedPaymentMethod = 'Aralash';
+      const btn = document.getElementById('btn-pay-mixed');
+      btn.style.borderColor = '#a855f7';
+      btn.style.background = '#faf5ff';
+      document.getElementById('mixed-payment-details').style.display = 'block';
+      updateMixedPaymentSums();
+    });
+
+    document.getElementById('input-pay-cash-amount').addEventListener('input', updateMixedPaymentSums);
+    document.getElementById('input-pay-card-amount').addEventListener('input', updateMixedPaymentSums);
+
+    // Transition from bill details (Step 1) to payment options (Step 2)
     document.getElementById('btn-confirm-payment').addEventListener('click', () => {
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
       const calc = calculateSessionCosts(cabin);
+
+      // Hide step 1 views
+      document.getElementById('checkout-bill-body').style.display = 'none';
+      document.getElementById('checkout-modal-actions-step1').style.display = 'none';
+
+      // Show step 2 views
+      document.getElementById('checkout-payment-method-area').style.display = 'block';
+      document.getElementById('checkout-modal-actions-step2').style.display = 'flex';
+
+      // Reset payment variables
+      selectedPaymentMethod = null;
+      resetPaymentButtons();
+      
+      document.getElementById('label-pay-mixed-total').innerText = formatMoney(calc.totalAmount);
+      document.getElementById('label-pay-mixed-entered').innerText = formatMoney(0);
+      document.getElementById('input-pay-cash-amount').value = '';
+      document.getElementById('input-pay-card-amount').value = '';
+      document.getElementById('mixed-payment-details').style.display = 'none';
+    });
+
+    document.getElementById('btn-back-to-step1').addEventListener('click', () => {
+      document.getElementById('checkout-bill-body').style.display = 'block';
+      document.getElementById('checkout-modal-actions-step1').style.display = 'flex';
+      document.getElementById('checkout-payment-method-area').style.display = 'none';
+      document.getElementById('checkout-modal-actions-step2').style.display = 'none';
+    });
+
+    // Step 2 Confirm Payment Method -> show receipt
+    document.getElementById('btn-submit-payment-method').addEventListener('click', () => {
+      if (!selectedPaymentMethod) {
+        alert("Iltimos, to'lov turini tanlang!");
+        return;
+      }
+
+      const cabin = cabins.find(c => c.id === activeCabinId);
+      if (!cabin || !cabin.session) return;
+
+      const calc = calculateSessionCosts(cabin);
+      
+      let cashAmt = 0;
+      let cardAmt = 0;
+
+      if (selectedPaymentMethod === 'Naqd') {
+        cashAmt = calc.totalAmount;
+        cardAmt = 0;
+      } else if (selectedPaymentMethod === 'Karta') {
+        cashAmt = 0;
+        cardAmt = calc.totalAmount;
+      } else if (selectedPaymentMethod === 'Aralash') {
+        cashAmt = parseInt(document.getElementById('input-pay-cash-amount').value) || 0;
+        cardAmt = parseInt(document.getElementById('input-pay-card-amount').value) || 0;
+
+        if (cashAmt + cardAmt !== calc.totalAmount) {
+          alert(`Kiritilgan jami summa (${formatMoney(cashAmt + cardAmt)}) hisoblangan jami summaga (${formatMoney(calc.totalAmount)}) teng emas!`);
+          return;
+        }
+      }
+
       const receiptNo = `AURA-${receiptCounter.toString().padStart(5, '0')}`;
       receiptCounter++;
 
@@ -7060,7 +7466,10 @@
         adminProductAmount: calc.adminProductsAmount,
         adminTotalAmount: calc.adminTotalAmount,
         products: cabin.session.products ? [...cabin.session.products] : [],
-        dateString: dateStr
+        dateString: dateStr,
+        paymentMethod: selectedPaymentMethod,
+        cashAmount: cashAmt,
+        cardAmount: cardAmt
       };
       pendingCabinId = cabin.id;
 
@@ -7076,6 +7485,11 @@
             </div>
           `).join('')
         : `<div class="receipt-no-products">Mahsulotlar yo'q</div>`;
+
+      let paymentMethodDisplay = selectedPaymentMethod;
+      if (selectedPaymentMethod === 'Aralash') {
+        paymentMethodDisplay = `Aralash (Naqd: ${formatMoney(cashAmt)}, Karta: ${formatMoney(cardAmt)})`;
+      }
 
       // Build full receipt inner HTML
       document.getElementById('receipt-inner-body').innerHTML = `
@@ -7114,6 +7528,10 @@
           <div class="receipt-detail-row">
             <span class="receipt-detail-label">Sana</span>
             <span class="receipt-detail-value">${dateLabel}</span>
+          </div>
+          <div class="receipt-detail-row" style="border-top: 1px dashed #edf2f7; padding-top: 4px; margin-top: 4px;">
+            <span class="receipt-detail-label">To'lov turi</span>
+            <span class="receipt-detail-value" style="font-weight: 700;">${paymentMethodDisplay}</span>
           </div>
         </div>
 
@@ -7275,6 +7693,11 @@
       const eTime = new Date(orderObj.endTime).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
       const dObj = new Date(orderObj.endTime);
 
+      let payMethodStr = orderObj.paymentMethod || 'Naqd';
+      if (orderObj.paymentMethod === 'Aralash') {
+        payMethodStr = `Aralash (Naqd: ${formatMoney(orderObj.cashAmount)}, Karta: ${formatMoney(orderObj.cardAmount)})`;
+      }
+
       const body = document.getElementById('history-details-body');
       body.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; font-size: 13px; color: #4b5563;">
@@ -7293,6 +7716,10 @@
           <div style="display: flex; justify-content: space-between;">
             <span>O'yin to'lovi:</span>
             <span style="font-weight: 700; color: #1f2937;">${formatMoney(orderObj.playAmount)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 1px dashed #edf2f7; padding-top: 6px; margin-top: 4px;">
+            <span>To'lov turi:</span>
+            <span style="font-weight: 700; color: #1f2937;">${payMethodStr}</span>
           </div>
         </div>
 
@@ -9756,6 +10183,11 @@
       const durationStr = formatDuration(orderObj.playedDurationMinutes);
       const operator = orderObj.operator || 'Ishchi';
 
+      let payMethodStr = orderObj.paymentMethod || 'Naqd';
+      if (orderObj.paymentMethod === 'Aralash') {
+        payMethodStr = `Aralash (Naqd: ${formatMoney(orderObj.cashAmount)}, Karta: ${formatMoney(orderObj.cardAmount)})`;
+      }
+
       let productsHTML = '';
       if (orderObj.products && orderObj.products.length > 0) {
         orderObj.products.forEach(p => {
@@ -9795,6 +10227,10 @@
           <div style="display: flex; justify-content: space-between;">
             <span>Operator:</span>
             <span style="font-weight: 700; color: var(--text-main);">${operator}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px;">
+            <span>To'lov turi:</span>
+            <span style="font-weight: 700; color: var(--text-main);">${payMethodStr}</span>
           </div>
         </div>
 
@@ -10008,7 +10444,20 @@
       const totalProducts = filtered.reduce((s, o) => s + (o.adminProductAmount !== undefined ? o.adminProductAmount : o.productAmount), 0);
       const totalRevenue = totalPlay + totalProducts;
 
+      const totalCash = filtered.reduce((sum, o) => {
+        if (o.cashAmount !== undefined) return sum + o.cashAmount;
+        if (o.paymentMethod === 'Karta') return sum;
+        return sum + (o.adminTotalAmount !== undefined ? o.adminTotalAmount : o.totalAmount);
+      }, 0);
+      const totalCard = filtered.reduce((sum, o) => {
+        if (o.cardAmount !== undefined) return sum + o.cardAmount;
+        if (o.paymentMethod === 'Karta') return sum + (o.adminTotalAmount !== undefined ? o.adminTotalAmount : o.totalAmount);
+        return sum;
+      }, 0);
+
       document.getElementById('revenue-total-val').innerText = formatMoney(totalRevenue);
+      document.getElementById('revenue-cash-val').innerText = formatMoney(totalCash);
+      document.getElementById('revenue-card-val').innerText = formatMoney(totalCard);
       document.getElementById('revenue-play-val').innerText = formatMoney(totalPlay);
       document.getElementById('revenue-products-val').innerText = formatMoney(totalProducts);
 
@@ -10280,8 +10729,21 @@
       const avgDurationMins = totalSessions > 0 ? Math.round(totalMins / totalSessions) : 0;
       const totalProductOrders = filtered.filter(o => o.products && o.products.length > 0).length;
 
+      const totalCash = filtered.reduce((sum, o) => {
+        if (o.cashAmount !== undefined) return sum + o.cashAmount;
+        if (o.paymentMethod === 'Karta') return sum;
+        return sum + o.totalAmount;
+      }, 0);
+      const totalCard = filtered.reduce((sum, o) => {
+        if (o.cardAmount !== undefined) return sum + o.cardAmount;
+        if (o.paymentMethod === 'Karta') return sum + o.totalAmount;
+        return sum;
+      }, 0);
+
       document.getElementById('stats-total-sessions').innerText = totalSessions + " ta o'yin";
       document.getElementById('stats-total-revenue').innerText = formatMoney(totalRevenue);
+      document.getElementById('stats-total-cash').innerText = formatMoney(totalCash);
+      document.getElementById('stats-total-card').innerText = formatMoney(totalCard);
       document.getElementById('stats-avg-duration').innerText = formatDuration(avgDurationMins);
       document.getElementById('stats-total-orders').innerText = totalProductOrders + " ta buyurtma";
 
@@ -10581,6 +11043,15 @@
             <span>${formatMoney(totalDrinksAmount)}</span>
           </div>
           
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px; border-top: 1px dashed #475569; padding-top: 8px;">
+            <span style="color: #cbd5e1;">Naqd to'lovlar</span>
+            <span style="color: #10b981; font-weight: 600;">${formatMoney(shiftData.totalCashAmount !== undefined ? shiftData.totalCashAmount : totalSales)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px;">
+            <span style="color: #cbd5e1;">Karta to'lovlar</span>
+            <span style="color: #3b82f6; font-weight: 600;">${formatMoney(shiftData.totalCardAmount || 0)}</span>
+          </div>
+
           <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; margin-bottom: 6px; border-top: 1px solid #334155; padding-top: 12px;">
             <span>Umumiy savdo</span>
             <span style="color: #38bdf8;">${formatMoney(totalSales)}</span>
@@ -10857,10 +11328,20 @@
             <span style="color: #cbd5e1;">Mahsulotlar savdosi</span>
             <span>${formatMoney(totalDrinksAmount)}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;">
             <span style="color: #cbd5e1;">Kalyan savdosi</span>
             <span>${formatMoney(totalKalyanAmount)}</span>
           </div>
+          
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px; border-top: 1px dashed #475569; padding-top: 8px;">
+            <span style="color: #cbd5e1;">Naqd to'lovlar</span>
+            <span style="color: #10b981; font-weight: 600;">${formatMoney(shiftData.totalCashAmount !== undefined ? shiftData.totalCashAmount : totalSales)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 12px;">
+            <span style="color: #cbd5e1;">Karta to'lovlar</span>
+            <span style="color: #3b82f6; font-weight: 600;">${formatMoney(shiftData.totalCardAmount || 0)}</span>
+          </div>
+
           <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; margin-bottom: 6px; border-top: 1px solid #334155; padding-top: 12px;">
             <span>Umumiy savdo</span>
             <span style="color: #38bdf8;">${formatMoney(totalSales)}</span>
@@ -10917,8 +11398,31 @@
       let totalDrinksAmount = 0;
       let totalKalyanAmount = 0;
       let totalKalyanProfit = 0;
+      let totalCashAmount = 0;
+      let totalCardAmount = 0;
 
       shiftOrders.forEach(o => {
+        let cashAmt = 0;
+        let cardAmt = 0;
+        if (o.cashAmount !== undefined) {
+          cashAmt = o.cashAmount;
+        } else if (o.paymentMethod === 'Karta') {
+          cashAmt = 0;
+        } else {
+          cashAmt = o.totalAmount;
+        }
+
+        if (o.cardAmount !== undefined) {
+          cardAmt = o.cardAmount;
+        } else if (o.paymentMethod === 'Karta') {
+          cardAmt = o.totalAmount;
+        } else {
+          cardAmt = 0;
+        }
+
+        totalCashAmount += cashAmt;
+        totalCardAmount += cardAmt;
+
         if (o.playAmount > 0) {
           const cabin = cabins.find(c => c.id === o.cabinId);
           let cType = cabin ? cabin.type : 'PS4';
@@ -11000,6 +11504,8 @@
         totalKalyanProfit,
         totalSales,
         totalProfit,
+        totalCashAmount,
+        totalCardAmount,
         totalClients: shiftOrders.length,
         totalSessions: ps4Count + ps5Count + vipCount
       };
