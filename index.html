@@ -4222,7 +4222,11 @@
         <div class="details-order-section">
           <div class="order-section-header">
             <h3 class="order-section-title">Buyurtma</h3>
-            <button class="text-link" id="btn-details-edit-products">Qo'shish</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="text-link" id="btn-details-edit-products">Qo'shish</button>
+              <span style="color: #cbd5e1; font-weight: 500;">|</span>
+              <button class="text-link" id="btn-details-add-custom-product" style="color: #10b981;">Mahsulot qo'shish</button>
+            </div>
           </div>
 
           <div class="order-items-list" id="details-products-list">
@@ -4485,6 +4489,30 @@
         </div>
         <div class="modal-actions">
           <button class="btn-primary" id="btn-submit-edit-session">Saqlash</button>
+          <button class="btn-secondary btn-close-modal">Bekor qilish</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOM PRODUCT ADD MODAL -->
+    <div class="modal-overlay" id="modal-add-custom-product">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">Mahsulot qo'shish</h3>
+          <button class="icon-btn btn-close-modal"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="custom-product-name">Mahsulot nomi (ixtiyoriy)</label>
+            <input type="text" id="custom-product-name" class="form-input" placeholder="Masalan: Chips, Pitsa, Cola va h.k.">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="custom-product-price" style="font-size: 14px; font-weight: 700; color: var(--text-main);">Summasi (majburiy)</label>
+            <input type="number" id="custom-product-price" class="form-input" placeholder="Summani yozing (masalan: 20000)" style="font-size: 18px; font-weight: bold; padding: 12px;" required>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-primary" id="btn-submit-add-custom-product" style="background: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);">Qo'shish</button>
           <button class="btn-secondary btn-close-modal">Bekor qilish</button>
         </div>
       </div>
@@ -6835,7 +6863,7 @@
           row.className = 'order-item-row';
 
           const prodInfo = PRODUCTS_LIST.find(pr => pr.id === p.id);
-          const imgSrc = prodInfo ? prodInfo.img : 'rasmlar/coca_cola.png';
+          const imgSrc = prodInfo ? prodInfo.img : 'rasmlar/logo.png';
 
           row.innerHTML = `
             <div class="order-item-left">
@@ -6845,10 +6873,34 @@
                 <div class="order-item-qty">${p.quantity} ta</div>
               </div>
             </div>
-            <div class="order-item-price">${formatMoney(p.price * p.quantity)}</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="order-item-price">${formatMoney(p.price * p.quantity)}</span>
+              ${p.id.startsWith('custom_') ? `
+                <button class="btn-delete-custom-product" data-id="${p.id}" style="background: none; border: none; color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%;" title="O'chirish">
+                  <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                </button>
+              ` : ''}
+            </div>
           `;
           itemsContainer.appendChild(row);
           productsTotal += (p.price * p.quantity);
+        });
+
+        // Custom mahsulotlarni o'chirish handlerlari
+        itemsContainer.querySelectorAll('.btn-delete-custom-product').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const prodId = btn.getAttribute('data-id');
+            if (confirm("Ushbu mahsulotni o'chirishni xohlaysizmi?")) {
+              cabin.session.products = cabin.session.products.filter(item => item.id !== prodId);
+              saveDB();
+              updateActiveCabinDetailsView();
+              renderCabinsGrid();
+              if (typeof renderDashboard === 'function') {
+                renderDashboard();
+              }
+            }
+          });
         });
       } else {
         itemsContainer.innerHTML = `<div class="no-items-placeholder">Hech narsa buyurtma qilinmagan</div>`;
@@ -6875,6 +6927,10 @@
         paymentText.innerText = "To'lanmagan";
         paymentText.style.color = '#ef4444';
         paymentCheckbox.checked = false;
+      }
+
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
       }
     }
 
@@ -7289,6 +7345,60 @@
       showView('view-products');
     });
 
+    // CUSTOM PRODUCT MODAL LOGIC
+    const btnDetailsAddCustomProduct = document.getElementById('btn-details-add-custom-product');
+    const modalAddCustomProduct = document.getElementById('modal-add-custom-product');
+    const btnSubmitAddCustomProduct = document.getElementById('btn-submit-add-custom-product');
+
+    if (btnDetailsAddCustomProduct) {
+      btnDetailsAddCustomProduct.addEventListener('click', () => {
+        document.getElementById('custom-product-name').value = '';
+        document.getElementById('custom-product-price').value = '';
+        modalAddCustomProduct.classList.add('active');
+      });
+    }
+
+    if (btnSubmitAddCustomProduct) {
+      btnSubmitAddCustomProduct.addEventListener('click', () => {
+        const cabin = cabins.find(c => c.id === activeCabinId);
+        if (!cabin || !cabin.session) return;
+
+        const price = parseFloat(document.getElementById('custom-product-price').value);
+        if (isNaN(price) || price <= 0) {
+          alert("Iltimos, summani to'g'ri kiriting.");
+          return;
+        }
+
+        let name = document.getElementById('custom-product-name').value.trim();
+        if (!name) {
+          name = "Mahsulot";
+        }
+
+        if (!cabin.session.products) {
+          cabin.session.products = [];
+        }
+
+        cabin.session.products.push({
+          id: 'custom_' + Date.now(),
+          name: name,
+          price: price,
+          quantity: 1,
+          category: 'Boshqa'
+        });
+
+        saveDB();
+        updateActiveCabinDetailsView();
+        renderCabinsGrid();
+        if (typeof renderDashboard === 'function') {
+          renderDashboard();
+        }
+        closeAllModals();
+        
+        // Log action
+        addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', `${cabin.name} ga mahsulot qo'shildi: ${name} (${formatMoney(price)})`);
+      });
+    }
+
     // Render products on Products Page
     let currentProductCategory = 'Barchasi';
     let productsSearchQuery = '';
@@ -7459,6 +7569,8 @@
       const cabin = cabins.find(c => c.id === activeCabinId);
       if (!cabin || !cabin.session) return;
 
+      const customProducts = cabin.session.products ? cabin.session.products.filter(p => p.id.startsWith('custom_')) : [];
+
       cabin.session.products = [];
       for (const id in selectedProductsCart) {
         const prod = PRODUCTS_LIST.find(p => p.id === id);
@@ -7472,6 +7584,8 @@
           });
         }
       }
+
+      cabin.session.products.push(...customProducts);
 
       saveDBCabinDebounced();
     }
