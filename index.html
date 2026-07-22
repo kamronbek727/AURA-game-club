@@ -5821,8 +5821,14 @@
         return;
       }
 
+      // Reset sync state before (re-)initializing
+      auraRemoteSyncEnabled = false;
+
       supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      auraPatchLocalStorageSync();
+      if (!window._auraLocalStoragePatched) {
+        auraPatchLocalStorageSync();
+        window._auraLocalStoragePatched = true;
+      }
       await auraSyncServerTime();
 
       const { data, error } = await supabaseClient
@@ -5867,7 +5873,19 @@
             }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            // WebSocket ulanishi uzildi — 5 soniyadan so'ng qayta urinish
+            console.warn('Supabase realtime kanal uzildi (' + status + '), qayta ulanmoqda...');
+            setTimeout(() => {
+              try {
+                supabaseClient.removeAllChannels();
+              } catch(e) {}
+              auraSupabaseInitPromise = null; // Promise ni tiklash, qayta init uchun
+              initSupabaseSync().catch(() => {});
+            }, 5000);
+          }
+        });
     }
 
     function ensureSupabaseSync() {
@@ -5888,7 +5906,7 @@
       if (typeof auraReconcileCabinTimers === 'function') auraReconcileCabinTimers();
       if (typeof auraBindShiftTimer === 'function') auraBindShiftTimer();
 
-      const loggedRole = sessionStorage.getItem('aura_logged_role');
+      const loggedRole = localStorage.getItem('aura_logged_role');
       if (loggedRole === 'worker') {
         if (typeof renderCabinsGrid === 'function') renderCabinsGrid();
         if (typeof renderShiftToggle === 'function') renderShiftToggle();
@@ -6365,6 +6383,10 @@
     }
 
     // DYNAMIC TIMER UPDATE ENGINE
+    // Track previous alarm state to avoid unnecessary lucide.createIcons() calls
+    let _prevAlarmRequired = null;
+    let _prevAlarmExpiredCount = 0;
+
     function updateTimers() {
       let hasActive = false;
       let needGridRefresh = false;
@@ -6454,23 +6476,30 @@
       });
 
       // Update alarm sound and mute button UI
+      // Only update DOM when alarm state actually changes (avoids lucide.createIcons() every second)
       const muteBtn = document.getElementById('btn-mute-alarm');
-      if (activeExpiredSessions.length > 0) {
+      const expiredCount = activeExpiredSessions.length;
+      const alarmStateChanged = (alarmRequired !== _prevAlarmRequired) || (expiredCount !== _prevAlarmExpiredCount);
+
+      if (expiredCount > 0) {
         if (muteBtn) {
-          muteBtn.style.display = 'flex';
-          if (!alarmRequired) {
-            muteBtn.style.animation = 'none';
-            muteBtn.style.background = '#e2e8f0';
-            muteBtn.style.color = '#64748b';
-            muteBtn.innerHTML = '<i data-lucide="bell-off" style="width: 20px; height: 20px;"></i>';
-          } else {
-            muteBtn.style.animation = 'pulse-red 1.5s infinite';
-            muteBtn.style.background = '#fee2e2';
-            muteBtn.style.color = '#ef4444';
-            muteBtn.innerHTML = '<i data-lucide="bell" style="width: 20px; height: 20px;"></i>';
-          }
-          if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+          if (alarmStateChanged) {
+            muteBtn.style.display = 'flex';
+            if (!alarmRequired) {
+              muteBtn.style.animation = 'none';
+              muteBtn.style.background = '#e2e8f0';
+              muteBtn.style.color = '#64748b';
+              muteBtn.innerHTML = '<i data-lucide="bell-off" style="width: 20px; height: 20px;"></i>';
+            } else {
+              muteBtn.style.animation = 'pulse-red 1.5s infinite';
+              muteBtn.style.background = '#fee2e2';
+              muteBtn.style.color = '#ef4444';
+              muteBtn.innerHTML = '<i data-lucide="bell" style="width: 20px; height: 20px;"></i>';
+            }
+            // Only call createIcons when content actually changes
+            if (typeof lucide !== 'undefined') {
+              try { lucide.createIcons({ nodes: [muteBtn] }); } catch(e) { lucide.createIcons(); }
+            }
           }
         }
 
@@ -6485,7 +6514,7 @@
           }
         }
       } else {
-        if (muteBtn) {
+        if (muteBtn && alarmStateChanged) {
           muteBtn.style.display = 'none';
         }
         if (!alarmAudio.paused) {
@@ -6494,7 +6523,11 @@
         }
       }
 
-      if (hasActive) {
+      _prevAlarmRequired = alarmRequired;
+      _prevAlarmExpiredCount = expiredCount;
+
+      // Only update details view if it is currently visible
+      if (hasActive && auraIsViewVisible('view-details')) {
         updateActiveCabinDetailsView();
       }
 
@@ -6509,13 +6542,20 @@
 
     function startTimerLoop() {
       if (globalTimerInterval) clearInterval(globalTimerInterval);
+      // Timer loop: only sync UI — fast, no network calls
       globalTimerInterval = setInterval(() => {
         updateTimers();
         if (typeof updateShiftTimer === 'function') updateShiftTimer();
-        if (Date.now() - auraLastServerTimeSync > 5 * 60 * 1000) {
-          auraSyncServerTime();
-        }
       }, 1000);
+
+      // Server time sync runs independently every 5 minutes
+      // This prevents network latency from blocking the 1-second UI tick
+      if (window._auraServerSyncInterval) clearInterval(window._auraServerSyncInterval);
+      window._auraServerSyncInterval = setInterval(() => {
+        if (Date.now() - auraLastServerTimeSync > 5 * 60 * 1000) {
+          auraSyncServerTime().catch(() => {});
+        }
+      }, 30000);
     }
 
     // VIEW 1: CABINS GRID RENDER
@@ -7160,7 +7200,7 @@
         renderDashboard();
       }
 
-      addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', `Sessiya o'tkazildi: ${sourceCabin.name} -> ${targetCabin.name} (Soati: ${formatMoney(preservedPrice)} -> ${formatMoney(targetCabin.pricePerHour)})`);
+      addLog(localStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', `Sessiya o'tkazildi: ${sourceCabin.name} -> ${targetCabin.name} (Soati: ${formatMoney(preservedPrice)} -> ${formatMoney(targetCabin.pricePerHour)})`);
 
       // Switch detail view to target cabin
       openCabinDetails(targetCabin.id);
@@ -7395,7 +7435,7 @@
         closeAllModals();
         
         // Log action
-        addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', `${cabin.name} ga mahsulot qo'shildi: ${name} (${formatMoney(price)})`);
+        addLog(localStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', `${cabin.name} ga mahsulot qo'shildi: ${name} (${formatMoney(price)})`);
       });
     }
 
@@ -8642,7 +8682,7 @@
         const correctWorkerPw = localStorage.getItem('aura_worker_password') || '1111';
         if (password === correctWorkerPw) {
           addLog('Ishchi', 'Tizimga kirdi');
-          sessionStorage.setItem('aura_logged_role', 'worker');
+          localStorage.setItem('aura_logged_role', 'worker');
           const returnBar = document.getElementById('admin-return-bar');
           if (returnBar) returnBar.style.display = 'none';
           loginOverlay.classList.remove('active');
@@ -8664,7 +8704,7 @@
         const correctAdminPw = localStorage.getItem('aura_admin_password') || 'admin';
         if (password === correctAdminPw) {
           addLog('Admin', 'Tizimga kirdi');
-          sessionStorage.setItem('aura_logged_role', 'admin');
+          localStorage.setItem('aura_logged_role', 'admin');
           loginOverlay.classList.remove('active');
           splashScreen.style.display = 'none';
 
@@ -8753,10 +8793,10 @@
       const isParamAdmin = urlParams.get('role') === 'admin';
 
       if (isParamAdmin) {
-        sessionStorage.setItem('aura_logged_role', 'admin');
+        localStorage.setItem('aura_logged_role', 'admin');
       }
 
-      const loggedRole = sessionStorage.getItem('aura_logged_role');
+      const loggedRole = localStorage.getItem('aura_logged_role');
       if (loggedRole === 'admin') {
         // Skip splash screen
         const splash = document.getElementById('splash-screen');
@@ -9736,7 +9776,7 @@
     document.getElementById('btn-logout').addEventListener('click', () => {
       if (confirm("Admin paneldan chiqishni xohlaysizmi?")) {
         addLog("Tizimdan chiqdi");
-        sessionStorage.removeItem('aura_logged_role');
+        localStorage.removeItem('aura_logged_role');
         window.location.href = 'index.html';
       }
     });
@@ -11537,7 +11577,7 @@
       }
 
       // Restore session state
-      const loggedRole = sessionStorage.getItem('aura_logged_role');
+      const loggedRole = localStorage.getItem('aura_logged_role');
       if (loggedRole === 'worker') {
         const splash = document.getElementById('splash-screen');
         if (splash) splash.style.display = 'none';
@@ -11777,7 +11817,7 @@
       auraBindShiftTimer();
       renderShiftToggle();
       updateShiftTimer();
-      addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
+      addLog(localStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Yangi smena boshladi');
     }
 
     function finishShift() {
@@ -11948,7 +11988,7 @@
 
         renderShiftToggle();
         modalShiftReport.classList.remove('active');
-        addLog(sessionStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi');
+        addLog(localStorage.getItem('aura_logged_role') === 'admin' ? 'Admin' : 'Operator', 'Smenani yopdi');
 
         // Refresh admin side if needed
         if (typeof renderAdminShifts === 'function') renderAdminShifts();
@@ -11972,3 +12012,4 @@
 </body>
 
 </html>
+
